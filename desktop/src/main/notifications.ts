@@ -3,7 +3,9 @@ import { promisify } from 'node:util';
 import type { NotifyMuteResult } from '../shared/types';
 import { load, save } from './settings';
 
-const run = promisify(execFile);
+const execAsync = promisify(execFile);
+// No console window: reg.exe started from a GUI app would otherwise flash one.
+const run = (cmd: string, args: string[]) => execAsync(cmd, args, { windowsHide: true });
 
 /**
  * Hide OS notification pop-ups while sharing (D14). Best effort per OS:

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { COMPANY_SERVER } from '../shared/config';
 import { suggestName } from '../shared/names-suggest';
 import type { AnnoEvent, ScreenSource, Settings, SignalMsg, UpdateState } from '../shared/types';
+import { allowMic, micAccess, openMicSettings } from './micAccess';
 import { muteNotifications, restoreNotifications } from './notifications';
 import * as p2p from './p2p';
 import { setupPortableData } from './portable';
@@ -189,6 +190,9 @@ function registerIpc(): void {
 
   ipcMain.handle('notify:mute', (_e, mute: boolean) => muteNotifications(mute));
   ipcMain.handle('wifi:fingerprint', () => wifiFingerprint());
+  ipcMain.handle('mic:access', () => micAccess());
+  ipcMain.handle('mic:allow', () => allowMic());
+  ipcMain.handle('mic:settings', () => openMicSettings());
   ipcMain.handle('wifi:location-settings', () =>
     shell.openExternal(
       process.platform === 'win32' ? 'ms-settings:privacy-location' : 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',

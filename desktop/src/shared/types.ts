@@ -92,6 +92,11 @@ export interface ScwApi {
   wifiFingerprint(): Promise<WifiScan>;
   /** Opens the OS page where location access for desktop apps is switched on. */
   openLocationSettings(): Promise<void>;
+  /** Windows' microphone privacy switches (a blocked mic records silence instead of failing). */
+  micAccess(): Promise<MicAccess>;
+  /** Turns on this user's microphone switches; returns the state afterwards. */
+  allowMic(): Promise<MicAccess>;
+  openMicSettings(): Promise<void>;
   // P2P presenter side
   p2pHostStart(title: string, presenter: string): Promise<void>;
   p2pHostStop(): Promise<void>;
@@ -110,3 +115,6 @@ export interface ScwApi {
   onOverlayEvent(cb: (e: AnnoEvent) => void): () => void;
   onOverlayInit(cb: (presenterName: string) => void): () => void;
 }
+
+/** blocked: this user's switch (the app can turn it on); blocked-device: the whole PC's (admin only). */
+export type MicAccess = 'allowed' | 'blocked' | 'blocked-device';

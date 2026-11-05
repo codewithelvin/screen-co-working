@@ -1,7 +1,7 @@
-import { AudioMutedOutlined, AudioOutlined, LoadingOutlined, TeamOutlined } from '@ant-design/icons';
-import { App, Button, Space, Tag, Tooltip } from 'antd';
+import { AudioMutedOutlined, AudioOutlined, LoadingOutlined, SettingOutlined, TeamOutlined, WarningOutlined } from '@ant-design/icons';
+import { App, Button, Dropdown, type MenuProps, Space, Tag, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import type { Session, Snapshot } from '../session/Session';
+import type { AudioDevices, Session, Snapshot } from '../session/Session';
 
 /**
  * Voice (D36–D39): only people away from the others may talk. Someone sitting with
@@ -108,9 +108,40 @@ export function MicControl({ session, snap }: { session: Session; snap: Snapshot
     );
   }
 
+  const micIssue = snap.micChecking ? (
+    <Tooltip title="Mikrofondan səs gəlmir. Kompüterdəki digər mikrofonlar yoxlanılır.">
+      <Tag icon={<LoadingOutlined />}>Mikrofon yoxlanılır…</Tag>
+    </Tooltip>
+  ) : snap.micProblem === 'blocked' ? (
+    <Tooltip title="Windows bu proqrama mikrofonu vermir və səsiniz eşidilmir. Düymə Windows-da «Masaüstü proqramlara mikrofona icazə ver» seçimini açır.">
+      <Button
+        size="small"
+        danger
+        icon={<WarningOutlined />}
+        loading={busy}
+        onClick={() => void run(() => session.allowMic(), 'İcazəni açmaq alınmadı. Windows parametrlərində açın.')}
+      >
+        Mikrofona icazə ver
+      </Button>
+    </Tooltip>
+  ) : snap.micProblem === 'blocked-device' ? (
+    <Tooltip title="Bu kompüterdə mikrofon Windows parametrlərində tam söndürülüb. Onu yalnız administrator aça bilər.">
+      <Button size="small" danger icon={<WarningOutlined />} onClick={() => void window.scw.openMicSettings()}>
+        Mikrofon söndürülüb
+      </Button>
+    </Tooltip>
+  ) : snap.micProblem === 'silent' ? (
+    <Tooltip title="Mikrofondan səs gəlmir və başqa işlək mikrofon tapılmadı. Mikrofonun qoşulduğunu və səsinin bağlı olmadığını yoxlayın.">
+      <Button size="small" danger icon={<WarningOutlined />} onClick={() => void window.scw.openMicSettings()}>
+        Mikrofondan səs gəlmir
+      </Button>
+    </Tooltip>
+  ) : null;
+
   return (
     <Space size={6}>
       {locationHint}
+      {snap.micOn && micIssue}
       {snap.voice === 'room-mic' && (
         <Tooltip title="Yanınızdakılar sizin kompüterinizlə danışır və eşidir.">
           <Tag color="processing" icon={<TeamOutlined />}>
@@ -130,6 +161,64 @@ export function MicControl({ session, snap }: { session: Session; snap: Snapshot
       >
         {snap.micOn ? 'Mikrofonu bağla' : 'Mikrofonu aç'} <span className="kbd">Space</span>
       </Button>
+      <DevicePicker session={session} />
     </Space>
+  );
+}
+
+/** Which microphone and speaker the call uses; Windows' default is often a monitor without speakers. */
+function DevicePicker({ session }: { session: Session }) {
+  const { message } = App.useApp();
+  const [devices, setDevices] = useState<AudioDevices | null>(null);
+
+  const load = () =>
+    void session
+      .audioDevices()
+      .then(setDevices)
+      .catch(() => setDevices(null));
+
+  const name = (d: MediaDeviceInfo, i: number) =>
+    d.deviceId === 'default' ? `Windows-un seçimi${d.label ? ` (${d.label.replace(/^Default - /, '')})` : ''}` : d.label || `Cihaz ${i + 1}`;
+
+  const items: MenuProps['items'] = devices
+    ? [
+        {
+          type: 'group',
+          label: 'Mikrofon',
+          children: devices.mics.map((d, i) => ({ key: `audioinput:${d.deviceId}`, label: name(d, i) })),
+        },
+        { type: 'divider' },
+        {
+          type: 'group',
+          label: 'Dinamik',
+          children: devices.speakers.map((d, i) => ({ key: `audiooutput:${d.deviceId}`, label: name(d, i) })),
+        },
+      ]
+    : [{ key: 'loading', label: 'Cihazlar yüklənir…', disabled: true }];
+
+  const pick: MenuProps['onClick'] = ({ key }) => {
+    const [kind, ...rest] = key.split(':');
+    if (kind !== 'audioinput' && kind !== 'audiooutput') return;
+    session
+      .setAudioDevice(kind, rest.join(':'))
+      .then(load)
+      .catch(() => message.error('Cihazı dəyişmək alınmadı.'));
+  };
+
+  return (
+    <Dropdown
+      trigger={['click']}
+      onOpenChange={(open) => open && load()}
+      menu={{
+        items,
+        onClick: pick,
+        selectable: true,
+        selectedKeys: devices ? [`audioinput:${devices.mic}`, `audiooutput:${devices.speaker}`] : [],
+      }}
+    >
+      <Tooltip title="Mikrofon və dinamik">
+        <Button size="small" icon={<SettingOutlined />} aria-label="Səs cihazları" />
+      </Tooltip>
+    </Dropdown>
   );
 }

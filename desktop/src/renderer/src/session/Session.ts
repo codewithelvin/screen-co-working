@@ -29,6 +29,9 @@ export interface Snapshot {
   voice: VoiceRole;
   roomMic: string;
   micOn: boolean;
+  micProblem: MicProblem;
+  /** Trying the other microphones after the open one stayed silent. */
+  micChecking: boolean;
   /** Why the Wi-Fi scan came back empty, if it did (shown next to the mic control). */
   wifi: WifiScan['status'] | null;
   /** LiveKit lost the connection and is restoring it (e.g. after a Wi-Fi roam). */
@@ -59,6 +62,8 @@ export abstract class Session {
       voice: init.mode === 'p2p' ? 'off' : 'pending',
       roomMic: '',
       micOn: false,
+      micProblem: null,
+      micChecking: false,
       wifi: null,
       reconnecting: false,
     };
@@ -125,6 +130,32 @@ export abstract class Session {
   abstract setMic(on: boolean): Promise<void>;
   /** Take over my group's room mic (D38). */
   abstract takeRoomMic(): Promise<void>;
+
+  /** Microphones and speakers to choose from, with the ones in use (none in P2P: screen only). */
+  async audioDevices(): Promise<AudioDevices> {
+    return { mics: [], speakers: [], mic: '', speaker: '' };
+  }
+
+  async setAudioDevice(kind: 'audioinput' | 'audiooutput', id: string): Promise<void> {
+    void kind;
+    void id;
+  }
+
+  /** Turn on Windows' microphone switches for this user and reopen the mic. */
+  async allowMic(): Promise<void> {}
 }
+
+export interface AudioDevices {
+  mics: MediaDeviceInfo[];
+  speakers: MediaDeviceInfo[];
+  mic: string;
+  speaker: string;
+}
+
+/**
+ * Why the open mic carries no sound: Windows' privacy switch for this user or for the whole
+ * PC (it then records silence instead of failing), or a device that gives nothing.
+ */
+export type MicProblem = 'blocked' | 'blocked-device' | 'silent' | null;
 
 export const SCREEN_ENCODING = { maxBitrate: 8_000_000, maxFramerate: 15 };

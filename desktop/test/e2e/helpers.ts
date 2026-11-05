@@ -32,7 +32,12 @@ export function allVoicesMuted(page: Page): Promise<boolean> {
  * Start an app instance with its own settings folder (SCW_DATA_DIR). The server is fixed in the
  * build; tests point it at the test stack with SCW_SERVER. A null name means first run.
  */
-export async function launch(name: string | null, server = API, wifi: [string, number][] = []): Promise<AppHandle> {
+export async function launch(
+  name: string | null,
+  server = API,
+  wifi: [string, number][] = [],
+  extraArgs: string[] = [],
+): Promise<AppHandle> {
   const dir = mkdtempSync(join(tmpdir(), 'scw-e2e-'));
   if (name) writeFileSync(join(dir, 'settings.json'), JSON.stringify({ name }));
   // SCW_E2E_EXE runs the packaged app (e.g. release/win-unpacked/Screen Co-Working.exe) instead of out/.
@@ -40,7 +45,12 @@ export async function launch(name: string | null, server = API, wifi: [string, n
   const app = await electron.launch({
     ...(exe ? { executablePath: exe } : {}),
     // A fake microphone, and a fake Wi-Fi scan (none by default: everyone counts as alone).
-    args: [...(exe ? [] : [join(__dirname, '..', '..')]), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: [
+      ...(exe ? [] : [join(__dirname, '..', '..')]),
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
+      ...extraArgs,
+    ],
     env: {
       ...process.env,
       SCW_DATA_DIR: dir,
@@ -105,4 +115,26 @@ export async function overlayInk(app: ElectronApplication): Promise<number> {
     for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
     return n;
   });
+}
+
+/** A WAV file of pure silence: a fake microphone that behaves like one Windows has blocked. */
+export function silentWav(): string {
+  const rate = 48_000;
+  const samples = rate * 2;
+  const buf = Buffer.alloc(44 + samples * 2);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + samples * 2, 4);
+  buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(samples * 2, 40);
+  const file = join(mkdtempSync(join(tmpdir(), 'scw-e2e-')), 'silence.wav');
+  writeFileSync(file, buf);
+  return file;
 }

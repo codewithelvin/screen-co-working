@@ -127,7 +127,9 @@ public static class ScwWlan {
   }
 }
 '@
-Add-Type -TypeDefinition $src
+$dll = Join-Path $env:TEMP 'scw-wlan-v1.dll'
+# Compile once per PC: Add-Type runs csc.exe, which can flash a console window from a hidden helper.
+try { Add-Type -Path $dll } catch { Add-Type -TypeDefinition $src -OutputAssembly $dll; Add-Type -Path $dll }
 while ($null -ne ($line = [Console]::In.ReadLine())) {
   try { [Console]::Out.WriteLine([ScwWlan]::Next()) } catch { [Console]::Out.WriteLine('{"status":"unavailable"}') }
   [Console]::Out.Flush()
@@ -136,24 +138,33 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
 
 let helper: ChildProcessWithoutNullStreams | null = null;
 const waiting: ((line: string) => void)[] = [];
+// A helper that keeps dying (antivirus, blocked PowerShell) must not be restarted every 20 s:
+// after this many starts the app sticks to netsh for the rest of the run (2026-11-05, a PC kept
+// opening console windows).
+const MAX_HELPER_STARTS = 2;
+let helperStarts = 0;
 
 function startHelper(): ChildProcessWithoutNullStreams {
-  const file = join(tmpdir(), 'scw-wifi-scan-v1.ps1');
+  helperStarts++;
+  const file = join(tmpdir(), 'scw-wifi-scan-v2.ps1');
   writeFileSync(file, HELPER);
   const child = spawn(
     'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file],
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', file],
     { windowsHide: true },
   );
   createInterface({ input: child.stdout }).on('line', (line) => waiting.shift()?.(line));
+  child.on('error', () => undefined);
+  child.stdin.on('error', () => undefined); // writing to a helper that just died
   child.on('exit', () => {
-    helper = null;
+    if (helper === child) helper = null;
     for (const w of waiting.splice(0)) w('{"status":"unavailable"}');
   });
   return child;
 }
 
 async function windows(): Promise<RawScan> {
+  if (!helper && helperStarts >= MAX_HELPER_STARTS) return { status: 'ok', aps: await netsh() };
   helper ??= startHelper();
   const line = await new Promise<string>((resolve) => {
     const timer = setTimeout(() => resolve('timeout'), 20_000);

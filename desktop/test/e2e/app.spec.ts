@@ -13,6 +13,7 @@ import {
   OFFICE_WIFI,
   overlayInk,
   shareFirstScreen,
+  silentWav,
   videoWidth,
 } from './helpers';
 
@@ -212,4 +213,31 @@ test('server refuses an app below the minimum version and the app blocks until i
   } finally {
     writeFileSync(manifest, original);
   }
+});
+
+test('a mic that records only silence is caught; a working one is not', async () => {
+  const mute = await launch('Elvin', undefined, [], [`--use-file-for-fake-audio-capture=${silentWav()}`]);
+  const ok = await launch('Aysel');
+  apps.push(mute, ok);
+  const code = await createRoom(mute.page, 'Mikrofon yoxlaması');
+  await joinByCode(ok.page, code);
+
+  // The only (fake) microphone is dead and Windows allows the mic, so there is nothing to switch to.
+  await mute.page.getByRole('button', { name: 'Mikrofonu aç' }).click();
+  await expect(mute.page.getByRole('button', { name: 'Mikrofondan səs gəlmir' })).toBeVisible({ timeout: 20_000 });
+  // Muting clears the warning.
+  await mute.page.getByRole('button', { name: 'Mikrofonu bağla' }).click();
+  await expect(mute.page.getByRole('button', { name: 'Mikrofondan səs gəlmir' })).toHaveCount(0);
+
+  // The default fake mic beeps: no warning.
+  await ok.page.getByRole('button', { name: 'Mikrofonu aç' }).click();
+  await expect(ok.page.getByRole('button', { name: 'Mikrofonu bağla' })).toBeVisible();
+  await ok.page.waitForTimeout(5_000);
+  await expect(ok.page.getByText('Mikrofondan səs gəlmir')).toHaveCount(0);
+  await expect(ok.page.getByText('Mikrofon yoxlanılır…')).toHaveCount(0);
+
+  // The device picker lists microphones and speakers.
+  await ok.page.getByRole('button', { name: 'Səs cihazları' }).click();
+  await expect(ok.page.getByText('Mikrofon', { exact: true })).toBeVisible();
+  await expect(ok.page.getByText('Dinamik', { exact: true })).toBeVisible();
 });
