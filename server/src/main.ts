@@ -4,6 +4,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { join as joinPath, normalize, extname } from 'node:path';
 import { AccessToken, RoomServiceClient, DataPacket_Kind, TrackSource, TrackType, type ParticipantInfo } from 'livekit-server-sdk';
 import { config } from './config.ts';
+import { type AccessPoint, type Fingerprint, groupsOf, voicePlan } from './proximity.ts';
 import { hostOf, newCode, roomTitle, sameSecret, uniqueName } from './rooms.ts';
 
 const rooms = new RoomServiceClient(config.livekitInternalUrl, config.apiKey, config.apiSecret);
@@ -134,6 +135,7 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
     canSubscribe: true,
     canPublish: true,
     canPublishData: true,
+    // No microphone until the server has placed this person (D40).
     canPublishSources: [TrackSource.SCREEN_SHARE],
   });
 
@@ -172,6 +174,84 @@ async function present(code: string, body: Record<string, unknown>) {
   presenters.set(code, identity);
   return { ok: true };
 }
+
+// ---------- voice (D36–D40) ----------
+
+/** identity -> latest Wi-Fi fingerprint. */
+const fingerprints = new Map<string, Fingerprint>();
+/** identity -> when they asked for their group's room mic. */
+const micClaims = new Map<string, number>();
+/** identity -> role last pushed to LiveKit, to skip needless updates. */
+const appliedRoles = new Map<string, string>();
+/** Rooms with voice activity, re-evaluated periodically. */
+const voiceRooms = new Set<string>();
+
+function readAccessPoints(v: unknown): AccessPoint[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((p): p is AccessPoint => typeof p?.h === 'string' && typeof p?.s === 'number')
+    .slice(0, 30)
+    .map((p) => ({ h: p.h.slice(0, 64), s: Math.max(0, Math.min(100, Math.round(p.s))) }));
+}
+
+/** Recompute who sits together and push mic permissions + voice attributes to LiveKit. */
+async function applyVoice(code: string): Promise<void> {
+  const participants = await participantsOf(code);
+  if (participants.length === 0) {
+    voiceRooms.delete(code);
+    return;
+  }
+  const presenter = currentPresenter(code, participants);
+  const members = participants.map((p) => ({
+    identity: p.identity,
+    joinedAt: p.joinedAt,
+    presenting: p.identity === presenter || isPresenting(p),
+  }));
+  const groups = groupsOf(
+    members.map((m) => m.identity),
+    fingerprints,
+    { now: Date.now(), maxAgeMs: config.fingerprintMaxAgeMs, threshold: config.proximityThreshold },
+  );
+  const plan = voicePlan(members, groups, micClaims);
+  for (const [identity, entry] of plan) {
+    const key = `${entry.role}|${entry.group}|${entry.roomMic}`;
+    if (appliedRoles.get(identity) === key) continue;
+    const mic = entry.role !== 'group';
+    await rooms
+      .updateParticipant(lk(code), identity, {
+        permission: {
+          canSubscribe: true,
+          canPublish: true,
+          canPublishData: true,
+          canPublishSources: mic ? [TrackSource.SCREEN_SHARE, TrackSource.MICROPHONE] : [TrackSource.SCREEN_SHARE],
+        },
+        attributes: { voice: entry.role, group: entry.group, roomMic: entry.roomMic },
+      })
+      .then(() => appliedRoles.set(identity, key))
+      .catch((e: unknown) => console.warn(`voice update failed for ${identity}:`, e instanceof Error ? e.message : e));
+  }
+}
+
+/** A client reports its Wi-Fi fingerprint (an empty list when it has no Wi-Fi). */
+async function presence(code: string, body: Record<string, unknown>) {
+  const identity = authenticate(code, body);
+  fingerprints.set(identity, { aps: readAccessPoints(body.aps), at: Date.now() });
+  voiceRooms.add(code);
+  await applyVoice(code);
+  return { ok: true };
+}
+
+/** A group member takes over the group's room mic (D38). */
+async function takeRoomMic(code: string, body: Record<string, unknown>) {
+  const identity = authenticate(code, body);
+  micClaims.set(identity, Date.now());
+  await applyVoice(code);
+  return { ok: true };
+}
+
+setInterval(() => {
+  for (const code of voiceRooms) void applyVoice(code).catch(() => undefined);
+}, config.voiceIntervalMs).unref();
 
 const encoder = new TextEncoder();
 
@@ -250,10 +330,11 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/api/rooms') return send(res, 201, await createRoom(await readJson(req)));
     if (req.method === 'POST' && path === '/api/join') return send(res, 200, await join(await readJson(req), req));
 
-    const m = /^\/api\/rooms\/([A-Z0-9]{4,12})\/(present|action)$/.exec(path);
+    const m = /^\/api\/rooms\/([A-Z0-9]{4,12})\/(present|action|presence|room-mic)$/.exec(path);
     if (req.method === 'POST' && m) {
       const body = await readJson(req);
-      return send(res, 200, m[2] === 'present' ? await present(m[1], body) : await hostAction(m[1], body));
+      const handlers = { present, action: hostAction, presence, 'room-mic': takeRoomMic };
+      return send(res, 200, await handlers[m[2] as keyof typeof handlers](m[1], body));
     }
     if (req.method === 'GET' && path.startsWith('/updates/')) return serveUpdate(path.slice('/updates/'.length), res);
     send(res, 404, { error: 'not found' });

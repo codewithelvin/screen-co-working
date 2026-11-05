@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test';
 import {
+  allVoicesMuted,
   type AppHandle,
+  CANTEEN_WIFI,
   createRoom,
   DEAD_SERVER,
   drawOn,
   joinByCode,
   launch,
+  OFFICE_WIFI,
   overlayInk,
   shareFirstScreen,
   videoWidth,
@@ -141,4 +144,46 @@ test('server down: local P2P share is discovered and watched', async () => {
 
   await presenter.page.getByRole('button', { name: 'Dayandır' }).click();
   await expect(viewer.page.getByText('Təqdimatçı paylaşımı bitirdi.')).toBeVisible();
+});
+
+test('voice: three at one desk share a room mic, the one in the canteen talks', async () => {
+  const elvin = await launch('Elvin', undefined, OFFICE_WIFI);
+  const aysel = await launch('Aysel', undefined, OFFICE_WIFI);
+  const murad = await launch('Murad', undefined, OFFICE_WIFI);
+  const nigar = await launch('Nigar', undefined, CANTEEN_WIFI);
+  apps.push(elvin, aysel, murad, nigar);
+
+  const code = await createRoom(elvin.page, 'Səs otağı');
+  for (const a of [aysel, murad, nigar]) await joinByCode(a.page, code);
+  await expect(elvin.page.locator('.person-row')).toHaveCount(4);
+
+  // Elvin joined first, so his laptop is the desk's room mic; Aysel and Murad stay silent.
+  await expect(elvin.page.getByText('Otaq mikrofonu', { exact: true })).toBeVisible({ timeout: 20_000 });
+  for (const a of [aysel, murad]) {
+    await expect(a.page.getByRole('button', { name: 'Otaq mikrofonunu götür' })).toBeVisible({ timeout: 20_000 });
+    await expect(a.page.getByRole('button', { name: 'Mikrofonu aç' })).toHaveCount(0);
+  }
+  // Nigar in the canteen may talk; her mic starts muted.
+  const nigarMic = nigar.page.getByRole('button', { name: 'Mikrofonu aç' });
+  await expect(nigarMic).toBeVisible({ timeout: 20_000 });
+  await expect(nigar.page.getByText('Otaq mikrofonu', { exact: true })).toHaveCount(0);
+
+  await nigarMic.click();
+  await expect(nigar.page.getByRole('button', { name: 'Mikrofonu bağla' })).toBeVisible();
+  await expect(elvin.page.locator('.person-row', { hasText: 'Nigar' }).locator('.mic-icon')).toBeVisible();
+
+  // Only the room-mic laptop plays her voice; the others at the desk hear it from there.
+  await expect.poll(() => elvin.page.locator('audio').count()).toBeGreaterThan(0);
+  expect(await allVoicesMuted(elvin.page)).toBe(false);
+  await expect.poll(() => aysel.page.locator('audio').count()).toBeGreaterThan(0);
+  expect(await allVoicesMuted(aysel.page)).toBe(true);
+
+  // Elvin talks for the desk; then Aysel takes the room mic over and Elvin's mic goes off.
+  await elvin.page.getByRole('button', { name: 'Mikrofonu aç' }).click();
+  await expect(nigar.page.locator('.person-row', { hasText: 'Elvin' }).locator('.mic-icon')).toBeVisible();
+  await aysel.page.getByRole('button', { name: 'Otaq mikrofonunu götür' }).click();
+  await expect(aysel.page.getByText('Otaq mikrofonu', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(elvin.page.getByRole('button', { name: 'Otaq mikrofonunu götür' })).toBeVisible({ timeout: 20_000 });
+  await expect(nigar.page.locator('.person-row', { hasText: 'Elvin' }).locator('.mic-icon')).toHaveCount(0);
+  expect(await allVoicesMuted(elvin.page)).toBe(true);
 });

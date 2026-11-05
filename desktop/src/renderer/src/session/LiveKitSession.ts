@@ -3,22 +3,34 @@ import {
   type LocalTrackPublication,
   type Participant,
   type RemoteParticipant,
+  type RemoteTrack,
   Room,
   RoomEvent,
   Track,
 } from 'livekit-client';
-import type { AnnoEvent, AnnoMsg, ScreenSource } from '../../../shared/types';
+import type { AnnoEvent, AnnoMsg, ScreenSource, VoiceRole } from '../../../shared/types';
 import { api, type JoinInfo } from '../api';
 import { type HostAction, type Person, SCREEN_ENCODING, Session } from './Session';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+/** How often the Wi-Fi fingerprint is re-sent; the server forgets it after 90 s. */
+const PRESENCE_MS = 20_000;
+const ROLES: VoiceRole[] = ['remote', 'room-mic', 'group'];
+
+function roleOf(p: Participant): VoiceRole {
+  const v = p.attributes.voice as VoiceRole;
+  return ROLES.includes(v) ? v : 'pending';
+}
 
 /** A room on the LAN server, media relayed by LiveKit (D8, D26). */
 export class LiveKitSession extends Session {
   private room = new Room({ adaptiveStream: false, dynacast: true });
   private publication: LocalTrackPublication | null = null;
   private source: ScreenSource | null = null;
+  private presenceTimer: ReturnType<typeof setInterval> | undefined;
+  /** Remote voices, played unless I sit in a group without the room mic (D38). */
+  private audio = new Map<RemoteTrack, HTMLMediaElement[]>();
 
   private constructor(
     private server: string,
@@ -42,8 +54,18 @@ export class LiveKitSession extends Session {
       .on(RoomEvent.ParticipantDisconnected, refresh)
       .on(RoomEvent.TrackPublished, refresh)
       .on(RoomEvent.TrackUnpublished, refresh)
-      .on(RoomEvent.TrackSubscribed, refresh)
-      .on(RoomEvent.TrackUnsubscribed, refresh)
+      .on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === Track.Kind.Audio) this.playVoice(track);
+        refresh();
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track) => {
+        this.stopVoice(track);
+        refresh();
+      })
+      .on(RoomEvent.TrackMuted, refresh)
+      .on(RoomEvent.TrackUnmuted, refresh)
+      .on(RoomEvent.ParticipantAttributesChanged, () => void this.onVoiceChanged())
+      .on(RoomEvent.ParticipantPermissionsChanged, () => void this.onVoiceChanged())
       .on(RoomEvent.LocalTrackPublished, refresh)
       .on(RoomEvent.LocalTrackUnpublished, refresh)
       .on(RoomEvent.TrackMuted, (pub) => {
@@ -54,6 +76,8 @@ export class LiveKitSession extends Session {
       })
       .on(RoomEvent.DataReceived, (payload, participant) => this.onData(payload, participant))
       .on(RoomEvent.Disconnected, (reason) => {
+        clearInterval(this.presenceTimer);
+        for (const t of [...this.audio.keys()]) this.stopVoice(t);
         void this.cleanupShare();
         const why =
           reason === DisconnectReason.PARTICIPANT_REMOVED
@@ -67,6 +91,48 @@ export class LiveKitSession extends Session {
       });
     await r.connect(this.join.url, this.join.token, { autoSubscribe: true });
     this.refresh();
+    void this.reportPresence();
+    this.presenceTimer = setInterval(() => void this.reportPresence(), PRESENCE_MS);
+  }
+
+  /** Send my Wi-Fi fingerprint; the server decides who sits together (D37). */
+  private async reportPresence(): Promise<void> {
+    const aps = await window.scw.wifiFingerprint().catch(() => []);
+    if (this.room.state !== 'connected') return;
+    await api.presence(this.server, this.snap.code, this.join, aps).catch(() => undefined);
+  }
+
+  /** The server changed someone's voice role; a silent group member must not transmit (D36). */
+  private async onVoiceChanged(): Promise<void> {
+    const voice = roleOf(this.room.localParticipant);
+    if ((voice === 'group' || voice === 'pending') && this.room.localParticipant.isMicrophoneEnabled) {
+      await this.room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+    }
+    this.refresh();
+  }
+
+  /** People in a group hear the room through the room-mic laptop, not their own (D38). */
+  private get voiceMuted(): boolean {
+    return this.snap.voice === 'group' || this.snap.voice === 'pending';
+  }
+
+  private playVoice(track: RemoteTrack): void {
+    if (this.audio.has(track)) return;
+    const els = [track.attach()];
+    for (const el of els) {
+      el.muted = this.voiceMuted;
+      el.hidden = true;
+      document.body.appendChild(el);
+    }
+    this.audio.set(track, els);
+  }
+
+  private stopVoice(track: RemoteTrack): void {
+    const els = this.audio.get(track);
+    if (!els) return;
+    this.audio.delete(track);
+    track.detach();
+    for (const el of els) el.remove();
   }
 
   private refresh(): void {
@@ -79,6 +145,8 @@ export class LiveKitSession extends Session {
       host: p === host,
       presenting: p.isScreenShareEnabled,
       me: p === r.localParticipant,
+      voice: roleOf(p),
+      micOn: p.isMicrophoneEnabled,
     }));
 
     let remoteStream: MediaStream | null = null;
@@ -93,7 +161,17 @@ export class LiveKitSession extends Session {
     } else if (!this.snap.presenting) {
       paused = false;
     }
-    this.update({ people, remoteStream, paused });
+    const me = r.localParticipant;
+    const voice = roleOf(me);
+    this.update({
+      people,
+      remoteStream,
+      paused,
+      voice,
+      roomMic: me.attributes.roomMic ?? '',
+      micOn: me.isMicrophoneEnabled,
+    });
+    for (const els of this.audio.values()) for (const el of els) el.muted = this.voiceMuted;
   }
 
   private onData(payload: Uint8Array, participant?: RemoteParticipant): void {
@@ -178,7 +256,18 @@ export class LiveKitSession extends Session {
     await api.action(this.server, this.snap.code, this.join, action, target);
   }
 
+  async setMic(on: boolean): Promise<void> {
+    if (on && (this.snap.voice === 'group' || this.snap.voice === 'pending')) return;
+    await this.room.localParticipant.setMicrophoneEnabled(on, { echoCancellation: true, noiseSuppression: true });
+    this.refresh();
+  }
+
+  async takeRoomMic(): Promise<void> {
+    await api.takeRoomMic(this.server, this.snap.code, this.join);
+  }
+
   async leave(): Promise<void> {
+    clearInterval(this.presenceTimer);
     await this.stopShare();
     await this.room.disconnect();
   }

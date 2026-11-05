@@ -12,16 +12,38 @@ export interface AppHandle {
   page: Page;
 }
 
+/** Access points seen from one desk; laptops with this list sit together. */
+export const OFFICE_WIFI: [string, number][] = [
+  ['f4:e2:c6:00:00:01', 82],
+  ['f4:e2:c6:00:00:02', 64],
+  ['f4:e2:c6:00:00:03', 40],
+];
+export const CANTEEN_WIFI: [string, number][] = [
+  ['f4:e2:c6:00:00:07', 78],
+  ['f4:e2:c6:00:00:08', 55],
+];
+
+/** Whether every remote voice this app could play is muted. */
+export function allVoicesMuted(page: Page): Promise<boolean> {
+  return page.evaluate(() => [...document.querySelectorAll('audio')].every((a) => a.muted));
+}
+
 /**
  * Start an app instance with its own settings folder (SCW_DATA_DIR). The server is fixed in the
  * build; tests point it at the test stack with SCW_SERVER. A null name means first run.
  */
-export async function launch(name: string | null, server = API): Promise<AppHandle> {
+export async function launch(name: string | null, server = API, wifi: [string, number][] = []): Promise<AppHandle> {
   const dir = mkdtempSync(join(tmpdir(), 'scw-e2e-'));
   if (name) writeFileSync(join(dir, 'settings.json'), JSON.stringify({ name }));
   const app = await electron.launch({
-    args: [join(__dirname, '..', '..')],
-    env: { ...process.env, SCW_DATA_DIR: dir, SCW_SERVER: server },
+    // A fake microphone, and a fake Wi-Fi scan (none by default: everyone counts as alone).
+    args: [join(__dirname, '..', '..'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    env: {
+      ...process.env,
+      SCW_DATA_DIR: dir,
+      SCW_SERVER: server,
+      SCW_FAKE_WIFI: JSON.stringify(wifi.map(([b, s]) => ({ b, s }))),
+    },
   });
   const page = await app.firstWindow();
   await page.waitForSelector('.layout');

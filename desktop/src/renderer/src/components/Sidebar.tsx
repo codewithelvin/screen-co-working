@@ -1,4 +1,5 @@
 import {
+  AudioOutlined,
   CrownFilled,
   DesktopOutlined,
   EllipsisOutlined,
@@ -168,6 +169,11 @@ export function Sidebar(p: Props) {
                   {x.host && (
                     <Tooltip title="Otağın sahibi">
                       <CrownFilled className="crown" />
+                    </Tooltip>
+                  )}
+                  {x.micOn && (
+                    <Tooltip title={x.voice === 'room-mic' ? 'Danışır (otaq mikrofonu)' : 'Mikrofonu açıqdır'}>
+                      <AudioOutlined className="mic-icon" />
                     </Tooltip>
                   )}
                   {x.presenting && (

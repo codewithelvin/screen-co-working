@@ -22,6 +22,7 @@ const api: ScwApi = {
   overlayHide: () => ipcRenderer.invoke('overlay:hide'),
   overlayEvent: (e) => ipcRenderer.send('overlay:event', e),
   muteNotifications: (mute) => ipcRenderer.invoke('notify:mute', mute),
+  wifiFingerprint: () => ipcRenderer.invoke('wifi:fingerprint'),
   p2pHostStart: (title, presenter) => ipcRenderer.invoke('p2p:host-start', title, presenter),
   p2pHostStop: () => ipcRenderer.invoke('p2p:host-stop'),
   p2pHostSend: (peerId, msg) => ipcRenderer.send('p2p:host-send', peerId, msg),

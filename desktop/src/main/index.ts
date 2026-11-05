@@ -9,6 +9,7 @@ import * as p2p from './p2p';
 import { setupPortableData } from './portable';
 import { load, save } from './settings';
 import { checkForUpdate, installUpdate } from './updater';
+import { wifiFingerprint } from './wifi';
 
 setupPortableData();
 
@@ -130,6 +131,7 @@ function registerIpc(): void {
   ipcMain.on('overlay:event', (_e, ev: AnnoEvent) => overlay?.webContents.send('overlay:event', ev));
 
   ipcMain.handle('notify:mute', (_e, mute: boolean) => muteNotifications(mute));
+  ipcMain.handle('wifi:fingerprint', () => wifiFingerprint());
 
   ipcMain.handle('p2p:host-start', (_e, title: string, presenter: string) =>
     p2p.hostStart(

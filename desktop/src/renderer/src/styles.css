@@ -30,6 +30,7 @@ html, body, #root, #root > .ant-app { margin: 0; height: 100%; background: #1414
 .person-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d9d9d9; }
 .crown { color: #faad14; }
 .presenting-icon { color: #ff4d4f; }
+.mic-icon { color: #52c41a; }
 .sidebar-foot { padding: 8px 12px; border-top: 1px solid #2a2a2e; font-size: 12px; }
 
 /* stage */

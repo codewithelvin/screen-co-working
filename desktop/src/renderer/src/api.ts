@@ -1,5 +1,7 @@
 /** Client for the room API on the LAN server. */
 
+import type { AccessPoint } from '../../shared/types';
+
 export interface RoomInfo {
   code: string;
   title: string;
@@ -59,6 +61,10 @@ export const api = {
     call<JoinInfo>(server, '/api/join', { code, name, hostname }),
   present: (server: string, code: string, j: JoinInfo, on: boolean) =>
     call(server, `/api/rooms/${code}/present`, { identity: j.identity, secret: j.secret, on }),
+  presence: (server: string, code: string, j: JoinInfo, aps: AccessPoint[]) =>
+    call(server, `/api/rooms/${code}/presence`, { identity: j.identity, secret: j.secret, aps }),
+  takeRoomMic: (server: string, code: string, j: JoinInfo) =>
+    call(server, `/api/rooms/${code}/room-mic`, { identity: j.identity, secret: j.secret }),
   action: (server: string, code: string, j: JoinInfo, action: string, target?: string) =>
     call(server, `/api/rooms/${code}/action`, { identity: j.identity, secret: j.secret, action, target }),
 };

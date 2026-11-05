@@ -15,4 +15,9 @@ export const config = {
   updatesDir: process.env.UPDATES_DIR ?? '/data/updates',
   /** LiveKit room-name prefix; keeps our rooms apart when the LiveKit is shared. */
   roomPrefix: process.env.ROOM_PREFIX ?? 'scw-',
+  /** Wi-Fi fingerprint similarity (0..1) from which two people count as next to each other (D37). */
+  proximityThreshold: Number(process.env.PROXIMITY_THRESHOLD ?? 0.5),
+  /** A fingerprint older than this no longer counts (clients report every 20 s). */
+  fingerprintMaxAgeMs: Number(process.env.FINGERPRINT_MAX_AGE_MS ?? 90_000),
+  voiceIntervalMs: Number(process.env.VOICE_INTERVAL_MS ?? 5_000),
 };

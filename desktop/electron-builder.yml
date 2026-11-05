@@ -23,4 +23,5 @@ mac:
   artifactName: Screen-Co-Working-${version}-mac-${arch}.zip
   extendInfo:
     NSScreenCaptureUsageDescription: Ekranınızı otaqdakı həmkarlarınıza göstərmək üçün.
+    NSMicrophoneUsageDescription: Ofisdən kənarda olanda həmkarlarınızla danışmaq üçün.
 publish: null

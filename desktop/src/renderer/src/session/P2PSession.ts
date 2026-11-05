@@ -41,8 +41,8 @@ export class P2PHostSession extends Session {
 
   private refresh(): void {
     const people: Person[] = [
-      { id: HOST_ID, name: this.name, host: true, presenting: this.snap.presenting, me: true },
-      ...[...this.peers].map(([id, p]) => ({ id, name: p.name, host: false, presenting: false, me: false })),
+      { id: HOST_ID, name: this.name, host: true, presenting: this.snap.presenting, me: true, voice: 'off', micOn: false },
+      ...[...this.peers].map(([id, p]) => ({ id, name: p.name, host: false, presenting: false, me: false, voice: 'off' as const, micOn: false })),
     ];
     this.update({ people });
   }
@@ -159,6 +159,10 @@ export class P2PHostSession extends Session {
     if (target) window.scw.p2pHostKick(target);
   }
 
+  async setMic(): Promise<void> {}
+
+  async takeRoomMic(): Promise<void> {}
+
   async leave(): Promise<void> {
     if (this.snap.ended) return;
     for (const f of this.off) f();
@@ -230,6 +234,8 @@ export class P2PViewerSession extends Session {
       host: p.id === HOST_ID,
       presenting: p.id === HOST_ID,
       me: p.id === this.snap.me,
+      voice: 'off' as const,
+      micOn: false,
     }));
     this.update({ people });
   }
@@ -288,6 +294,10 @@ export class P2PViewerSession extends Session {
   }
 
   async hostAction(): Promise<void> {}
+
+  async setMic(): Promise<void> {}
+
+  async takeRoomMic(): Promise<void> {}
 
   async leave(): Promise<void> {
     this.end('Paylaşımdan çıxdınız.');

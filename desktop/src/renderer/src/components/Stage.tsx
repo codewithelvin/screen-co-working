@@ -1,6 +1,7 @@
 import { CopyOutlined, DesktopOutlined, LogoutOutlined, PauseOutlined, PoweroffOutlined, StopOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Flex, Popconfirm, Space, Tag, Typography } from 'antd';
 import type { HostAction, Session, Snapshot } from '../session/Session';
+import { MicControl } from './MicControl';
 import { Viewer } from './Viewer';
 
 interface Props {
@@ -90,6 +91,7 @@ export function Stage({ session, snap, busy, onShare, onLeave, onHostAction, onP
           )}
         </Space>
         <Space>
+          <MicControl session={session} snap={snap} />
           {me?.host && snap.mode === 'server' && (
             <Popconfirm
               title="Otaq hamı üçün bağlansın?"

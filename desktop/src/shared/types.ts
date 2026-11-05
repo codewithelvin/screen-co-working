@@ -6,6 +6,15 @@ export interface Settings {
   server: string;
 }
 
+/** One visible Wi-Fi access point: hashed BSSID and signal 0..100 (D37). */
+export interface AccessPoint {
+  h: string;
+  s: number;
+}
+
+/** Voice role set by the server (D36–D38); 'pending' until it has placed us, 'off' in P2P mode. */
+export type VoiceRole = 'pending' | 'off' | 'remote' | 'room-mic' | 'group';
+
 export interface ScreenSource {
   id: string;
   name: string;
@@ -72,6 +81,7 @@ export interface ScwApi {
   overlayHide(): Promise<void>;
   overlayEvent(e: AnnoEvent): void;
   muteNotifications(mute: boolean): Promise<NotifyMuteResult>;
+  wifiFingerprint(): Promise<AccessPoint[]>;
   // P2P presenter side
   p2pHostStart(title: string, presenter: string): Promise<void>;
   p2pHostStop(): Promise<void>;

@@ -1,4 +1,4 @@
-import type { AnnoEvent, AnnoMsg, ScreenSource } from '../../../shared/types';
+import type { AnnoEvent, AnnoMsg, ScreenSource, VoiceRole } from '../../../shared/types';
 
 export interface Person {
   id: string;
@@ -6,6 +6,9 @@ export interface Person {
   host: boolean;
   presenting: boolean;
   me: boolean;
+  voice: VoiceRole;
+  /** Transmitting an unmuted microphone. */
+  micOn: boolean;
 }
 
 export interface Snapshot {
@@ -22,6 +25,10 @@ export interface Snapshot {
   /** Set once the session is over; the text says why. */
   ended: string | null;
   notifyResult: 'ok' | 'unsupported' | 'failed' | null;
+  /** My voice role (D36–D38) and the identity holding my group's room mic. */
+  voice: VoiceRole;
+  roomMic: string;
+  micOn: boolean;
 }
 
 export type HostAction = 'kick' | 'stopShare' | 'end';
@@ -37,7 +44,18 @@ export abstract class Session {
   private annoListeners = new Set<(e: AnnoEvent) => void>();
 
   constructor(init: Pick<Snapshot, 'mode' | 'title' | 'code' | 'me'>) {
-    this.snap = { ...init, people: [], remoteStream: null, presenting: false, paused: false, ended: null, notifyResult: null };
+    this.snap = {
+      ...init,
+      people: [],
+      remoteStream: null,
+      presenting: false,
+      paused: false,
+      ended: null,
+      notifyResult: null,
+      voice: init.mode === 'p2p' ? 'off' : 'pending',
+      roomMic: '',
+      micOn: false,
+    };
   }
 
   subscribe = (cb: () => void): (() => void) => {
@@ -97,6 +115,10 @@ export abstract class Session {
   abstract sendAnno(msg: AnnoMsg): void;
   abstract hostAction(action: HostAction, target?: string): Promise<void>;
   abstract leave(): Promise<void>;
+  /** Microphone on/off; only works while the server allows it (D39, D40). */
+  abstract setMic(on: boolean): Promise<void>;
+  /** Take over my group's room mic (D38). */
+  abstract takeRoomMic(): Promise<void>;
 }
 
 export const SCREEN_ENCODING = { maxBitrate: 8_000_000, maxFramerate: 15 };
