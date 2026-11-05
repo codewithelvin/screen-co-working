@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join as joinPath, normalize, extname } from 'node:path';
 import { AccessToken, RoomServiceClient, DataPacket_Kind, TrackSource, TrackType, type ParticipantInfo } from 'livekit-server-sdk';
@@ -10,8 +10,15 @@ import { mustUpdate } from './version.ts';
 
 const rooms = new RoomServiceClient(config.livekitInternalUrl, config.apiKey, config.apiSecret);
 
-/** identity -> per-join secret, proves who is calling a host action. */
-const secrets = new Map<string, { secret: string; room: string }>();
+/**
+ * Per-join secret that proves who is calling (host actions, presence, sharing). It is derived from
+ * the LiveKit secret instead of stored, so a server restart or update does not lock out the people
+ * in a running call (second live test, 2026-11-05).
+ */
+const passFor = (identity: string, code: string) =>
+  createHmac('sha256', config.apiSecret).update(`scw-pass:${code}:${identity}`).digest('base64url');
+/** Removed by the host: their pass stays refused (until a restart; by then they are out of the room). */
+const revoked = new Set<string>();
 /** room code -> identity of the current presenter. */
 const presenters = new Map<string, string>();
 
@@ -153,8 +160,7 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
   const displayName = uniqueName(name, hostname, participants.map((p) => p.name));
 
   const identity = randomUUID();
-  const secret = randomBytes(24).toString('base64url');
-  secrets.set(identity, { secret, room: code });
+  const secret = passFor(identity, code);
 
   const at = new AccessToken(config.apiKey, config.apiSecret, { identity, name: displayName, ttl: '12h' });
   at.addGrant({
@@ -180,8 +186,7 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
 function authenticate(code: string, body: Record<string, unknown>): string {
   const identity = str(body.identity, 'identity');
   const secret = str(body.secret, 'secret', 200);
-  const known = secrets.get(identity);
-  const ok = known !== undefined && known.room === code && sameSecret(known.secret, secret);
+  const ok = !revoked.has(identity) && sameSecret(passFor(identity, code), secret);
   if (!ok) throw new HttpError(403, 'not authorised');
   return identity;
 }
@@ -349,7 +354,7 @@ async function hostAction(code: string, body: Record<string, unknown>) {
 
   if (action === 'kick') {
     await rooms.removeParticipant(lk(code), target.identity);
-    secrets.delete(target.identity);
+    revoked.add(target.identity);
     if (presenters.get(code) === target.identity) presenters.delete(code);
     return { ok: true };
   }

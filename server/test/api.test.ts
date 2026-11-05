@@ -1,6 +1,7 @@
 // Integration tests against a running stack (deploy/docker-compose). Skipped when SCW_API is unset.
 // SCW_API=127.0.0.1:18080 node --test test/api.test.ts
 import assert from 'node:assert/strict';
+import { execSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 
 const API = process.env.SCW_API;
@@ -52,6 +53,25 @@ describe('room API', opts, () => {
     assert.equal(bad.status, 403);
     const otherRoom = await call(`/api/rooms/ZZZZZZ/present`, { identity: join.data.identity, secret: join.data.secret, on: true });
     assert.equal(otherRoom.status, 403);
+  });
+
+  // SCW_API_RESTART is a command that restarts the API (e.g. `docker restart scw-api-1`).
+  const restart = { skip: process.env.SCW_API_RESTART ? false : 'SCW_API_RESTART not set' };
+  it('a server restart does not lock out people already in a call', restart, async () => {
+    const { data } = await call('/api/rooms', { title: 'Restart test' });
+    const join = await call('/api/join', { code: data.code, name: 'A' });
+    const pass = { identity: join.data.identity, secret: join.data.secret };
+    execSync(process.env.SCW_API_RESTART as string, { stdio: 'ignore' });
+    for (let i = 0; i < 40; i++) {
+      const up = await fetch(`http://${API}/api/health`).then(
+        (r) => r.ok,
+        () => false,
+      );
+      if (up) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    assert.equal((await call(`/api/rooms/${data.code}/presence`, { ...pass, aps: [], wifi: 'ok' })).status, 200);
+    assert.equal((await call(`/api/rooms/${data.code}/present`, { ...pass, on: false })).status, 200);
   });
 
   it('does not serve files outside the updates folder', async () => {
