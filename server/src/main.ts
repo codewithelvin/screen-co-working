@@ -4,7 +4,7 @@ import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join as joinPath, normalize, extname } from 'node:path';
 import { AccessToken, RoomServiceClient, DataPacket_Kind, TrackSource, TrackType, type ParticipantInfo } from 'livekit-server-sdk';
 import { config } from './config.ts';
-import { type AccessPoint, type Fingerprint, groupsOf, voicePlan } from './proximity.ts';
+import { type AccessPoint, type Fingerprint, groupsOf, similarity, voicePlan } from './proximity.ts';
 import { hostOf, newCode, roomTitle, sameSecret, uniqueName } from './rooms.ts';
 import { mustUpdate } from './version.ts';
 
@@ -252,6 +252,37 @@ async function applyVoice(code: string): Promise<void> {
   }
 }
 
+/**
+ * Field calibration of the proximity threshold: who sees how many access points, and the similarity
+ * of every pair (only scores and display names; the hashed access points stay on the server).
+ */
+async function proximityReport(code: string) {
+  const participants = await participantsOf(code);
+  const now = Date.now();
+  const people = participants.map((p) => {
+    const f = fingerprints.get(p.identity);
+    return {
+      name: p.name,
+      voice: p.attributes.voice ?? 'pending',
+      accessPoints: f?.aps.length ?? 0,
+      ageSeconds: f ? Math.round((now - f.at) / 1000) : null,
+    };
+  });
+  const pairs = [];
+  for (let i = 0; i < participants.length; i++) {
+    for (let j = i + 1; j < participants.length; j++) {
+      const a = fingerprints.get(participants[i].identity);
+      const b = fingerprints.get(participants[j].identity);
+      pairs.push({
+        a: participants[i].name,
+        b: participants[j].name,
+        similarity: a && b ? Math.round(similarity(a.aps, b.aps) * 1000) / 1000 : null,
+      });
+    }
+  }
+  return { threshold: config.proximityThreshold, people, pairs };
+}
+
 /** A client reports its Wi-Fi fingerprint (an empty list when it has no Wi-Fi). */
 async function presence(code: string, body: Record<string, unknown>) {
   const identity = authenticate(code, body);
@@ -356,6 +387,8 @@ const server = createServer(async (req, res) => {
       const handlers = { present, action: hostAction, presence, 'room-mic': takeRoomMic };
       return send(res, 200, await handlers[m[2] as keyof typeof handlers](m[1], body));
     }
+    const prox = /^\/api\/rooms\/([A-Z0-9]{4,12})\/proximity$/.exec(path);
+    if (req.method === 'GET' && prox) return send(res, 200, await proximityReport(prox[1]));
     if (req.method === 'GET' && path.startsWith('/updates/')) return serveUpdate(path.slice('/updates/'.length), res);
     send(res, 404, { error: 'not found' });
   } catch (e) {

@@ -73,8 +73,14 @@ describe('voicePlan (D36, D38)', () => {
     assert.equal(plan.get('d')?.role, 'remote');
   });
 
-  it('a pair is not a group: both may talk', () => {
+  it('a pair side by side shares one mic (D36 amended: two live mics next to each other echo)', () => {
     const plan = voicePlan([member('a', 1n), member('b', 2n)], [['a', 'b']], new Map());
+    assert.equal(plan.get('a')?.role, 'room-mic');
+    assert.equal(plan.get('b')?.role, 'group');
+  });
+
+  it('someone alone may talk', () => {
+    const plan = voicePlan([member('a', 1n), member('b', 2n)], [['a'], ['b']], new Map());
     assert.equal(plan.get('a')?.role, 'remote');
     assert.equal(plan.get('b')?.role, 'remote');
   });
@@ -95,7 +101,7 @@ describe('voicePlan (D36, D38)', () => {
   });
 
   it('people who left the call do not count towards a group', () => {
-    const plan = voicePlan([member('a', 1n), member('b', 2n)], [['a', 'b', 'gone']], new Map());
+    const plan = voicePlan([member('a', 1n)], [['a', 'gone']], new Map());
     assert.equal(plan.get('a')?.role, 'remote');
   });
 });

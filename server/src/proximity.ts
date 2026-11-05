@@ -36,8 +36,11 @@ export interface VoicePlanEntry {
   roomMic: string;
 }
 
-/** Group size from which people are "together" (the person plus at least 2 others). */
-export const GROUP_MIN = 3;
+/**
+ * Group size from which people are "together": the person plus at least 1 other (D36, amended
+ * 2026-11-05: two laptops side by side with live mics and speakers echo, so a pair shares one mic).
+ */
+export const GROUP_MIN = 2;
 
 /** Weighted Jaccard similarity 0..1 of two fingerprints: Σ min(signal) / Σ max(signal) over all APs. */
 export function similarity(a: AccessPoint[], b: AccessPoint[]): number {
