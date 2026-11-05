@@ -11,6 +11,7 @@ import {
 } from 'livekit-client';
 import type { AnnoEvent, AnnoMsg, ScreenSource, VoiceRole } from '../../../shared/types';
 import { api, type JoinInfo } from '../api';
+import { isMonitorAudio } from './devices';
 import { type AudioDevices, type HostAction, type Person, SCREEN_ENCODING, Session } from './Session';
 
 const encoder = new TextEncoder();
@@ -62,6 +63,12 @@ async function peakOf(track: MediaStreamTrack, ms: number): Promise<number> {
   } finally {
     void ctx.close();
   }
+}
+
+/** Devices with their names; the names stay empty until the app has been allowed a mic once. */
+async function listDevices(kind: MediaDeviceKind): Promise<MediaDeviceInfo[]> {
+  const quick = await Room.getLocalDevices(kind, false);
+  return quick.some((d) => !d.label) ? Room.getLocalDevices(kind) : quick;
 }
 
 function roleOf(p: Participant): VoiceRole {
@@ -146,6 +153,7 @@ export class LiveKitSession extends Session {
     await r.connect(this.join.url, this.join.token, { autoSubscribe: true });
     const speaker = stored(SPEAKER_KEY);
     if (speaker) void r.switchActiveDevice('audiooutput', speaker).catch(() => false);
+    else void this.avoidMonitorSpeaker();
     this.refresh();
     void this.reportPresence();
     this.presenceTimer = setInterval(() => void this.reportPresence(), PRESENCE_MS);
@@ -388,15 +396,23 @@ export class LiveKitSession extends Session {
     }
   }
 
+  /**
+   * Windows often makes a monitor's HDMI/DisplayPort audio the default speaker, and most office
+   * monitors have none: the call then plays into nothing while Teams, with its own setting, works
+   * (live test, 2026-11-05). Without a choice of their own, such people get the first real speaker.
+   */
+  private async avoidMonitorSpeaker(): Promise<void> {
+    const outputs = await listDevices('audiooutput');
+    const current = outputs.find((d) => d.deviceId === 'default');
+    if (!current || !isMonitorAudio(current.label)) return;
+    const better = outputs.find(
+      (d) => d.deviceId !== 'default' && d.deviceId !== 'communications' && d.label && !isMonitorAudio(d.label),
+    );
+    if (better) await this.room.switchActiveDevice('audiooutput', better.deviceId).catch(() => false);
+  }
+
   async audioDevices(): Promise<AudioDevices> {
-    let [mics, speakers] = await Promise.all([
-      Room.getLocalDevices('audioinput', false),
-      Room.getLocalDevices('audiooutput', false),
-    ]);
-    // Device names stay empty until the app has used a mic once.
-    if (mics.some((d) => !d.label)) {
-      [mics, speakers] = await Promise.all([Room.getLocalDevices('audioinput'), Room.getLocalDevices('audiooutput')]);
-    }
+    const [mics, speakers] = await Promise.all([listDevices('audioinput'), listDevices('audiooutput')]);
     return {
       mics: mics.filter((d) => d.deviceId !== 'communications'),
       speakers: speakers.filter((d) => d.deviceId !== 'communications'),
