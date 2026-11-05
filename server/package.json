@@ -1,0 +1,21 @@
+{
+  "name": "@scw/server",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/rooms.test.ts",
+    "test:api": "node --test test/api.test.ts"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^6.0.3"
+  }
+}

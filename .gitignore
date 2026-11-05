@@ -1,0 +1,10 @@
+node_modules/
+out/
+dist/
+release/
+deploy/.env
+deploy/updates/*
+!deploy/updates/.gitkeep
+*.log
+test-results/
+playwright-report/

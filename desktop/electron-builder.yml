@@ -1,0 +1,26 @@
+# Portable builds only: no installer, settings live next to the program (D32).
+appId: az.company.screencoworking
+productName: Screen Co-Working
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+asar: true
+win:
+  target: portable
+  artifactName: Screen-Co-Working-${version}-win-portable.exe
+portable:
+  requestExecutionLevel: user
+  unpackDirName: ScreenCoWorking
+linux:
+  target: AppImage
+  category: Office
+  artifactName: Screen-Co-Working-${version}-linux-${arch}.AppImage
+mac:
+  target: zip
+  category: public.app-category.productivity
+  artifactName: Screen-Co-Working-${version}-mac-${arch}.zip
+  extendInfo:
+    NSScreenCaptureUsageDescription: Ekranınızı otaqdakı həmkarlarınıza göstərmək üçün.
+publish: null

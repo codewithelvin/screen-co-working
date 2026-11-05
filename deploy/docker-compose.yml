@@ -1,0 +1,29 @@
+# Runs on the Linux LAN server: `cp .env.example .env`, edit it, then `docker compose up -d`.
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.9
+    command: --config /etc/livekit.yaml --node-ip ${NODE_IP}
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "40000-40100:40000-40100/udp"
+    restart: unless-stopped
+
+  api:
+    build: ../server
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_INTERNAL_URL: http://livekit:7880
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-}
+    volumes:
+      - ./updates:/data/updates:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - livekit
+    restart: unless-stopped

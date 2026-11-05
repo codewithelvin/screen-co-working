@@ -1,0 +1,11 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.frame { position: fixed; inset: 0; border: 4px solid #ff3b30; box-sizing: border-box; pointer-events: none; }
+body.paused .frame { border-color: #faad14; border-style: dashed; }
+.badge {
+  position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+  background: #ff3b30; color: #fff; font: 600 13px "Segoe UI", system-ui, sans-serif;
+  padding: 3px 12px; border-radius: 0 0 8px 8px;
+}
+.badge:empty { display: none; }
+body.paused .badge { background: #faad14; color: #000; }
+#anno { position: fixed; inset: 0; width: 100%; height: 100%; }

@@ -1,0 +1,22 @@
+{
+  "name": "screen-co-working",
+  "private": true,
+  "workspaces": [
+    "server",
+    "desktop"
+  ],
+  "scripts": {
+    "server": "npm --workspace server run start",
+    "dev": "npm --workspace desktop run dev",
+    "build": "npm --workspace desktop run build",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace desktop run typecheck",
+    "test": "npm --workspace server test && npm --workspace desktop test",
+    "test:api": "npm --workspace server run test:api",
+    "test:e2e": "npm --workspace desktop run test:e2e",
+    "lint": "npm --workspace desktop run lint"
+  },
+  "allowScripts": {
+    "electron@45.2.3": true,
+    "electron-winstaller": false
+  }
+}
