@@ -4,7 +4,8 @@ The spec and binding decisions (D1–D32) live in the Obsidian vault at
 `Desktop/Projects/obsidian/Projects/Screen-Co-Working/Project Implementation.md`. Read §0 before changing behaviour.
 
 ## Invariants
-- Screen only: no audio or camera tracks, no chat. One presenter per room. Entire screen only.
+- Screen only: no camera, no chat. One presenter per room. Entire screen only.
+- Voice only for people with fewer than 2 call members nearby (Wi-Fi fingerprint, D36–D41). The server grants the mic through LiveKit permissions; never let the client decide. A group of 3+ uses one room-mic laptop. P2P has no voice.
 - Azerbaijani-only UI strings, written inline. Dark + compact antd theme.
 - No deprecated APIs: `npm --workspace desktop run lint` fails on them (antd v6 renames).
 - Portable builds only (Windows `portable`, Linux AppImage, macOS zip). Self-updater in `desktop/src/main/updater.ts`, no electron-updater.
