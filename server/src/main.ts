@@ -321,6 +321,15 @@ setInterval(() => {
   for (const code of voiceRooms) void applyVoice(code).catch(() => undefined);
 }, config.voiceIntervalMs).unref();
 
+// After a server restart the calls keep running in LiveKit, but our memory is empty: pick them up
+// so mic permissions are still evaluated (everyone counts as alone until fingerprints come back).
+void rooms
+  .listRooms()
+  .then((all) => {
+    for (const r of all) if (r.name.startsWith(config.roomPrefix)) voiceRooms.add(r.name.slice(config.roomPrefix.length));
+  })
+  .catch(() => undefined);
+
 const encoder = new TextEncoder();
 
 /** Host-only actions (D15). */
