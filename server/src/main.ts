@@ -15,6 +15,9 @@ const presenters = new Map<string, string>();
 
 const MAX_PARTICIPANTS = 50;
 
+/** Our rooms in LiveKit are `<prefix><code>`, so a LiveKit shared with another app (QueryDesk) stays separate. */
+const lk = (code: string) => config.roomPrefix + code;
+
 class HttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -53,7 +56,7 @@ function isPresenting(p: ParticipantInfo): boolean {
 
 async function participantsOf(code: string): Promise<ParticipantInfo[]> {
   try {
-    return await rooms.listParticipants(code);
+    return await rooms.listParticipants(lk(code));
   } catch {
     return [];
   }
@@ -72,15 +75,16 @@ function currentPresenter(code: string, participants: ParticipantInfo[]): string
 }
 
 async function listRooms() {
-  const list = await rooms.listRooms();
+  const list = (await rooms.listRooms()).filter((r) => r.name.startsWith(config.roomPrefix));
   const result = [];
   for (const r of list) {
-    const participants = await participantsOf(r.name);
+    const code = r.name.slice(config.roomPrefix.length);
+    const participants = await participantsOf(code);
     const host = hostOf(participants);
-    const presenter = currentPresenter(r.name, participants);
+    const presenter = currentPresenter(code, participants);
     result.push({
-      code: r.name,
-      title: roomTitle(r.metadata, r.name),
+      code,
+      title: roomTitle(r.metadata, code),
       createdAt: Number(r.creationTime) * 1000,
       participants: participants.map((p) => ({
         identity: p.identity,
@@ -97,7 +101,7 @@ async function createRoom(body: Record<string, unknown>) {
   const title = str(body.title, 'title', 60);
   const code = newCode();
   await rooms.createRoom({
-    name: code,
+    name: lk(code),
     emptyTimeout: 120,
     departureTimeout: 20,
     maxParticipants: MAX_PARTICIPANTS,
@@ -111,7 +115,7 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
   const name = str(body.name, 'name', 40);
   const hostname = typeof body.hostname === 'string' ? body.hostname.trim().slice(0, 40) : '';
 
-  const existing = await rooms.listRooms([code]);
+  const existing = await rooms.listRooms([lk(code)]);
   if (existing.length === 0) throw new HttpError(404, 'room not found');
   const participants = await participantsOf(code);
   if (participants.length >= MAX_PARTICIPANTS) throw new HttpError(409, 'room is full');
@@ -125,7 +129,7 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
 
   const at = new AccessToken(config.apiKey, config.apiSecret, { identity, name: displayName, ttl: '12h' });
   at.addGrant({
-    room: code,
+    room: lk(code),
     roomJoin: true,
     canSubscribe: true,
     canPublish: true,
@@ -179,7 +183,7 @@ async function hostAction(code: string, body: Record<string, unknown>) {
   const action = str(body.action, 'action');
 
   if (action === 'end') {
-    await rooms.deleteRoom(code);
+    await rooms.deleteRoom(lk(code));
     presenters.delete(code);
     return { ok: true };
   }
@@ -187,17 +191,17 @@ async function hostAction(code: string, body: Record<string, unknown>) {
   if (!target) throw new HttpError(404, 'participant not found');
 
   if (action === 'kick') {
-    await rooms.removeParticipant(code, target.identity);
+    await rooms.removeParticipant(lk(code), target.identity);
     secrets.delete(target.identity);
     if (presenters.get(code) === target.identity) presenters.delete(code);
     return { ok: true };
   }
   if (action === 'stopShare') {
-    await rooms.sendData(code, encoder.encode(JSON.stringify({ t: 'stop-share' })), DataPacket_Kind.RELIABLE, {
+    await rooms.sendData(lk(code), encoder.encode(JSON.stringify({ t: 'stop-share' })), DataPacket_Kind.RELIABLE, {
       destinationIdentities: [target.identity],
     });
     for (const t of target.tracks) {
-      if (t.source === TrackSource.SCREEN_SHARE) await rooms.mutePublishedTrack(code, target.identity, t.sid, true);
+      if (t.source === TrackSource.SCREEN_SHARE) await rooms.mutePublishedTrack(lk(code), target.identity, t.sid, true);
     }
     presenters.delete(code);
     return { ok: true };

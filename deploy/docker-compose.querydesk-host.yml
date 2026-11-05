@@ -1,0 +1,23 @@
+# Company LAN server 10.153.0.176, which also runs QueryDesk production.
+# Shares QueryDesk's LiveKit (host network, :7880) under its own API key "scw" (D33);
+# only the room API runs here. Our LiveKit rooms are named scw-<code>.
+#
+#   .env (mode 600) holds SCW_LIVEKIT_API_SECRET, copied from /opt/querydesk/.env, and SCW_VERSION.
+#   docker compose -f docker-compose.querydesk-host.yml up -d
+services:
+  api:
+    image: screen-co-working-api:${SCW_VERSION:-latest}
+    container_name: scw-api
+    restart: unless-stopped
+    environment:
+      LIVEKIT_API_KEY: scw
+      LIVEKIT_API_SECRET: ${SCW_LIVEKIT_API_SECRET:?set in .env}
+      LIVEKIT_INTERNAL_URL: http://host.docker.internal:7880
+      LIVEKIT_PUBLIC_URL: ws://10.153.0.176:7880
+      ROOM_PREFIX: scw-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./updates:/data/updates:ro
+    ports:
+      - "8090:8080"

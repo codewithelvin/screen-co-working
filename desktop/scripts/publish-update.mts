@@ -6,8 +6,9 @@ import { join } from 'node:path';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
 const target = process.argv[2];
+const from = process.argv[3] ?? 'release';
 if (!target) {
-  console.error('usage: node scripts/publish-update.mts <updates-dir>');
+  console.error('usage: node scripts/publish-update.mts <updates-dir> [release-dir]');
   process.exit(1);
 }
 mkdirSync(target, { recursive: true });
@@ -19,16 +20,16 @@ const kinds: Record<string, RegExp> = {
 };
 
 const files: Record<string, { file: string; sha256: string }> = {};
-for (const name of readdirSync('release')) {
+for (const name of readdirSync(from)) {
   const kind = Object.keys(kinds).find((k) => kinds[k].test(name));
   if (!kind) continue;
-  const data = readFileSync(join('release', name));
+  const data = readFileSync(join(from, name));
   files[kind] = { file: name, sha256: createHash('sha256').update(data).digest('hex') };
-  copyFileSync(join('release', name), join(target, name));
+  copyFileSync(join(from, name), join(target, name));
   console.log(`${kind}: ${name}`);
 }
 if (Object.keys(files).length === 0) {
-  console.error(`no builds for version ${pkg.version} in release/ — run npm run dist first`);
+  console.error(`no builds for version ${pkg.version} in ${from} — run npm run dist first`);
   process.exit(1);
 }
 writeFileSync(join(target, 'latest.json'), JSON.stringify({ version: pkg.version, files }, null, 2));
