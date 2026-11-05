@@ -1,8 +1,10 @@
-# Portable builds only: no installer, settings live next to the program (D32).
+# Windows portable exe + Linux AppImage (settings next to the program, D32), plus a .deb and a
+# macOS zip for the Homebrew cask (installed copies, per-user settings, D45).
 appId: az.company.screencoworking
 productName: Screen Co-Working
+# Every build lands in the sibling folder screen-co-working-builds/<version>/ (CI overrides it).
 directories:
-  output: release
+  output: ../../screen-co-working-builds/${version}
 files:
   - out/**
   - package.json
@@ -20,11 +22,21 @@ portable:
   requestExecutionLevel: user
   unpackDirName: ScreenCoWorking
 linux:
-  target: AppImage
+  target: [AppImage, deb]
   category: Office
-  artifactName: Screen-Co-Working-${version}-linux-${arch}.AppImage
+  executableName: screen-co-working
+  maintainer: Elvin Huseynov <codewithelvin@users.noreply.github.com>
+  artifactName: Screen-Co-Working-${version}-linux-${arch}.${ext}
+deb:
+  packageName: screen-co-working
 mac:
-  target: zip
+  target:
+    - target: zip
+      arch: [arm64, x64]
+  # Not notarised: ad-hoc signing lets Apple Silicon run it; the cask clears quarantine.
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
   category: public.app-category.productivity
   artifactName: Screen-Co-Working-${version}-mac-${arch}.zip
   extendInfo:

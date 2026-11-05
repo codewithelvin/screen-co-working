@@ -39,14 +39,24 @@ Desktop updates go to `~/screen-co-working/updates/` on that host.
 ```sh
 npm install
 npm run dev                      # development
-npm --workspace desktop run dist:win    # release/Screen-Co-Working-<v>-win-portable.exe
-npm --workspace desktop run dist:linux  # AppImage (build on Linux)
-npm --workspace desktop run dist:mac    # zipped .app (build on macOS)
+npm --workspace desktop run dist:win    # Windows portable exe
+npm --workspace desktop run dist:linux  # AppImage + .deb (build on Linux)
+npm --workspace desktop run dist:mac    # zipped .app, arm64 + x64 (build on macOS)
 ```
 
-Users copy the single file anywhere and run it. Settings (name, server address) and browser data
-are kept in `ScreenCoWorking-data/` next to the program. When that folder isn't writable, they go
-to the normal per-user folder instead.
+Every build goes to the sibling folder **`../screen-co-working-builds/<version>/`**, which holds only the
+deliverables (unpacked folders and builder logs are removed).
+
+| Platform | File | Install | Updates |
+|---|---|---|---|
+| Windows | `…-win-portable.exe` | none: copy anywhere and run | swaps itself on restart |
+| Linux | `…-linux-x86_64.AppImage` | none | swaps itself on restart |
+| Linux | `…-linux-amd64.deb` | `sudo apt install ./….deb` | downloads the new .deb and opens the installer |
+| macOS | Homebrew cask | `brew install --cask codewithelvin/tap/screen-co-working` | `brew update && brew upgrade --cask screen-co-working` |
+
+Portable copies (exe, AppImage) keep settings and browser data in `ScreenCoWorking-data/` next to the
+program, or in the per-user folder when that isn't writable. Installed copies (deb, brew) always use the
+per-user folder. The Mac app is ad-hoc signed, not notarised; the cask clears the quarantine flag.
 
 **Windows firewall:** the first run asks to allow network access. That access is only needed for
 no-server (P2P) mode: UDP 41234 for discovery, plus a random TCP port on the presenter's machine.
@@ -66,9 +76,13 @@ Tuning on the server: `PROXIMITY_THRESHOLD` (default 0.5, 0..1 similarity of two
 
 ## Releasing an update
 
-1. Bump `version` in `desktop/package.json` and build each platform.
-2. `cd desktop && node scripts/publish-update.mts <server>/deploy/updates`. This copies the builds and
-   writes `latest.json` with SHA-256 checksums.
+1. Bump `version` in `desktop/package.json`, commit, and push a tag `v<version>`. GitHub Actions
+   (`.github/workflows/release.yml`) builds Windows, Linux and macOS and attaches them to a GitHub Release.
+2. `npm --workspace desktop run builds:fetch` downloads the release into `../screen-co-working-builds/<version>/`,
+   writes the Homebrew cask, and pushes it to `codewithelvin/homebrew-tap` when a clone of that repo sits at
+   `../screen-co-working-builds/homebrew-tap`.
+3. `cd desktop && node scripts/publish-update.mts <updates-dir>` copies the exe, AppImage and .deb from the
+   builds folder and writes `latest.json` with SHA-256 checksums. Upload the files first, then `latest.json`.
 3. Running apps check `http://<server>:8080/updates/latest.json` at start and every 30 minutes. They
    download in the background and offer "Yenidən başlat" (restart) to swap the file in place.
 
@@ -77,9 +91,9 @@ Tuning on the server: `PROXIMITY_THRESHOLD` (default 0.5, 0..1 similarity of two
 Apps from before 0.2.1 send no version, so they count as older. The app shows a blocking "Yeni versiya
 tələb olunur" screen that downloads the update and restarts with one click. It never interrupts a
 room in progress: the screen appears after the user leaves. Later publishes keep the minimum unless
-`--min` is given again. `MIN_CLIENT_VERSION` on the server overrides the file.
+`--min` is given again. `MIN_CLIENT_VERSION` on the server overrides the file. Mac users see the brew
+command instead of a download.
 
-macOS builds are unsigned. Gatekeeper asks the user to allow the app on first launch.
 
 ## Tests
 

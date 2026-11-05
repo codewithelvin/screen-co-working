@@ -1,4 +1,4 @@
-import { App as AntApp, Button, Flex, Spin } from 'antd';
+import { App as AntApp, Flex, Spin } from 'antd';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { LocalSession, ScreenSource, Settings, UpdateState } from '../../shared/types';
 import { ApiError, api, type RoomInfo } from './api';
@@ -6,7 +6,7 @@ import { ScreenPicker } from './components/ScreenPicker';
 import { Setup } from './components/Setup';
 import { Sidebar } from './components/Sidebar';
 import { Stage } from './components/Stage';
-import { UpdateGate } from './components/UpdateGate';
+import { UpdateAction, UpdateGate } from './components/UpdateGate';
 import { LiveKitSession } from './session/LiveKitSession';
 import { P2PHostSession, P2PViewerSession } from './session/P2PSession';
 import type { HostAction, Session, Snapshot } from './session/Session';
@@ -93,13 +93,8 @@ export function App() {
           notification.info({
             key: 'update',
             title: `Yeni versiya hazırdır (v${s.version})`,
-            description: 'Proqramı yenidən başladıb yeniləyin.',
+            description: <UpdateAction update={s} small />,
             duration: 0,
-            actions: (
-              <Button type="primary" size="small" onClick={() => void window.scw.installUpdate()}>
-                Yenidən başlat
-              </Button>
-            ),
           });
         }
       }),

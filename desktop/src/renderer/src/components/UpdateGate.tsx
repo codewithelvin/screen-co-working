@@ -1,5 +1,6 @@
 import { CloudDownloadOutlined } from '@ant-design/icons';
 import { Button, Flex, Modal, Progress, Typography } from 'antd';
+import { BREW_UPGRADE } from '../../../shared/config';
 import type { UpdateState } from '../../../shared/types';
 
 /**
@@ -25,11 +26,7 @@ export function UpdateGate({ open, update }: { open: boolean; update: UpdateStat
             <Typography.Text>v{update.version} yüklənir…</Typography.Text>
           </>
         )}
-        {update.status === 'ready' && (
-          <Button type="primary" size="large" onClick={() => void window.scw.installUpdate()}>
-            Yenidən başlat və yenilə (v{update.version})
-          </Button>
-        )}
+        {update.status === 'ready' && <UpdateAction update={update} />}
         {(update.status === 'error' || update.status === 'idle') && (
           <>
             <Typography.Text type="danger">
@@ -42,5 +39,35 @@ export function UpdateGate({ open, update }: { open: boolean; update: UpdateStat
         )}
       </Flex>
     </Modal>
+  );
+}
+
+/** The final step differs per install: restart (portable), installer (.deb), or a Homebrew command. */
+export function UpdateAction({ update, small }: { update: Extract<UpdateState, { status: 'ready' }>; small?: boolean }) {
+  const size = small ? 'small' : 'large';
+  if (update.how === 'brew') {
+    return (
+      <Flex vertical gap={6} align="center">
+        <Typography.Text>Terminalda işə salın:</Typography.Text>
+        <Typography.Text code copyable={{ tooltips: ['Kopyala', 'Kopyalandı'] }}>
+          {BREW_UPGRADE}
+        </Typography.Text>
+      </Flex>
+    );
+  }
+  if (update.how === 'installer') {
+    return (
+      <Flex vertical gap={6} align="center">
+        <Button type="primary" size={size} onClick={() => void window.scw.installUpdate()}>
+          Quraşdırıcını aç (v{update.version})
+        </Button>
+        <Typography.Text type="secondary">Quraşdırdıqdan sonra proqramı yenidən açın.</Typography.Text>
+      </Flex>
+    );
+  }
+  return (
+    <Button type="primary" size={size} onClick={() => void window.scw.installUpdate()}>
+      Yenidən başlat və yenilə (v{update.version})
+    </Button>
   );
 }

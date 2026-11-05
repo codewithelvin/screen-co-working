@@ -9,22 +9,24 @@ import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { pipeline } from 'node:stream/promises';
 import type { UpdateState } from '../shared/types';
 import { isNewer } from '../shared/version';
-import { programFile } from './portable';
+import { installKind, programFile } from './portable';
 
 /**
- * Self-update for the portable builds (D19). electron-updater cannot update a portable
- * Windows exe, so the app does it itself: the LAN server publishes /updates/latest.json
- * (written by scripts/publish-update.ts), the app downloads its own platform's file next
- * to itself, checks the SHA-256, and swaps it in on restart.
+ * Self-update (D19, D45). The LAN server publishes /updates/latest.json (scripts/publish-update.mts).
+ * Portable exe and AppImage: download next to the program, check the SHA-256, swap on restart.
+ * .deb: download to temp and open the system installer. Homebrew: nothing to download; the user
+ * runs `brew upgrade` (the cask lives in the codewithelvin/homebrew-tap repo).
  */
 interface Manifest {
   version: string;
   /** Apps below this must update; the server refuses their joins. */
   minVersion?: string;
-  files: Partial<Record<'win' | 'linux' | 'mac', { file: string; sha256: string }>>;
+  files: Partial<Record<'win' | 'linux' | 'deb' | 'mac', { file: string; sha256: string }>>;
 }
 
-const platformKey = { win32: 'win', linux: 'linux', darwin: 'mac' } as const;
+/** Which latest.json entry this copy downloads; brew has none. */
+const fileKey = { portable: 'win', appimage: 'linux', deb: 'deb', brew: null } as const;
+const howFor = { portable: 'restart', appimage: 'restart', deb: 'installer', brew: 'brew' } as const;
 
 let state: UpdateState = { status: 'idle' };
 let staged: string | null = null;
@@ -32,21 +34,28 @@ let required = false;
 
 export async function checkForUpdate(server: string, emit: (s: UpdateState) => void): Promise<void> {
   if (!app.isPackaged || !server || state.status === 'downloading' || state.status === 'ready') return;
-  const key = platformKey[process.platform as keyof typeof platformKey];
-  if (!key) return;
+  const kind = installKind();
+  const key = fileKey[kind];
+  const how = howFor[kind];
   const base = `http://${server.replace(/^https?:\/\//, '').replace(/\/+$/, '')}/updates/`;
   try {
     const res = await fetch(base + 'latest.json', { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return;
     const manifest = (await res.json()) as Manifest;
-    const entry = manifest.files[key];
-    if (!entry || !isNewer(manifest.version, app.getVersion())) return;
+    if (!isNewer(manifest.version, app.getVersion())) return;
     required = !!manifest.minVersion && isNewer(manifest.minVersion, app.getVersion());
+    if (key === null) {
+      state = { status: 'ready', version: manifest.version, required, how };
+      emit(state);
+      return;
+    }
+    const entry = manifest.files[key];
+    if (!entry) return;
 
     state = { status: 'downloading', version: manifest.version, required };
     emit(state);
     const target = programFile();
-    const download = join(process.platform === 'darwin' ? tmpdir() : dirname(target), `.${basename(entry.file)}.part`);
+    const download = join(kind === 'deb' ? tmpdir() : dirname(target), kind === 'deb' ? basename(entry.file) : `.${basename(entry.file)}.part`);
     const file = await fetch(base + encodeURIComponent(entry.file));
     if (!file.ok || !file.body) throw new Error(`download failed (${file.status})`);
     const hash = createHash('sha256');
@@ -58,7 +67,7 @@ export async function checkForUpdate(server: string, emit: (s: UpdateState) => v
       throw new Error('checksum mismatch');
     }
     staged = download;
-    state = { status: 'ready', version: manifest.version, required };
+    state = { status: 'ready', version: manifest.version, required, how };
     emit(state);
   } catch (e) {
     state = { status: 'error', message: e instanceof Error ? e.message : String(e), required };
@@ -69,6 +78,12 @@ export async function checkForUpdate(server: string, emit: (s: UpdateState) => v
 /** Replace the program file with the staged download and start the new version. */
 export function installUpdate(): void {
   if (!staged || !existsSync(staged)) return;
+  if (installKind() === 'deb') {
+    // The system installer (Software / gdebi) replaces /opt while we're gone; the user reopens the app.
+    spawn('xdg-open', [staged], { detached: true, stdio: 'ignore' }).unref();
+    app.exit(0);
+    return;
+  }
   const target = programFile();
   const pid = process.pid;
 
@@ -97,27 +112,11 @@ export function installUpdate(): void {
       ].join('\r\n'),
     );
     spawn('cmd.exe', ['/c', script], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-  } else if (process.platform === 'linux') {
+  } else {
     // An AppImage can be replaced while it runs.
     chmodSync(staged, 0o755);
     renameSync(staged, target);
     spawn(target, [], { detached: true, stdio: 'ignore' }).unref();
-  } else {
-    // macOS: the download is a zip of the .app bundle.
-    const script = join(tmpdir(), `scw-update-${pid}.sh`);
-    writeFileSync(
-      script,
-      [
-        '#!/bin/sh',
-        `while kill -0 ${pid} 2>/dev/null; do sleep 1; done`,
-        `tmp=$(mktemp -d)`,
-        `ditto -x -k "${staged}" "$tmp" && rm -rf "${target}" && mv "$tmp"/*.app "${target}"`,
-        `rm -f "${staged}"`,
-        `open "${target}"`,
-      ].join('\n'),
-    );
-    chmodSync(script, 0o755);
-    spawn('/bin/sh', [script], { detached: true, stdio: 'ignore' }).unref();
   }
   // Exit hard: a graceful quit can linger, and the swap script waits for this PID to end.
   app.exit(0);

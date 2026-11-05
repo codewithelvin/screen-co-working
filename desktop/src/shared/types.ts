@@ -37,7 +37,8 @@ export type NotifyMuteResult = 'ok' | 'unsupported' | 'failed';
 export type UpdateState =
   | { status: 'idle' }
   | { status: 'downloading'; version: string; required: boolean }
-  | { status: 'ready'; version: string; required: boolean }
+  /** restart: swap the file and restart; installer: open the downloaded .deb; brew: run the shown command. */
+  | { status: 'ready'; version: string; required: boolean; how: 'restart' | 'installer' | 'brew' }
   | { status: 'error'; message: string; required: boolean };
 
 /** Pointer/annotation and control messages, coordinates normalised to 0..1 of the shared screen. */

@@ -1,7 +1,7 @@
 {
   "name": "@scw/desktop",
   "productName": "Screen Co-Working",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Silent screen co-working on the office LAN",
   "main": "out/main/index.js",
@@ -9,15 +9,16 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p .",
-    "dist": "electron-vite build && electron-builder",
-    "dist:win": "electron-vite build && electron-builder --win",
-    "dist:linux": "electron-vite build && electron-builder --linux",
-    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist": "electron-vite build && electron-builder && node scripts/tidy-builds.mts",
+    "dist:win": "electron-vite build && electron-builder --win && node scripts/tidy-builds.mts",
+    "dist:linux": "electron-vite build && electron-builder --linux && node scripts/tidy-builds.mts",
+    "dist:mac": "electron-vite build && electron-builder --mac && node scripts/tidy-builds.mts",
     "publish-update": "node scripts/publish-update.mts",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
-    "audit:ui": "electron-vite build && playwright test -c test/audit"
+    "audit:ui": "electron-vite build && playwright test -c test/audit",
+    "builds:fetch": "node scripts/fetch-builds.mts"
   },
   "devDependencies": {
     "@ant-design/icons": "^6.3.4",
@@ -44,5 +45,6 @@
   "dependencies": {
     "ws": "^8.22.1"
   },
-  "author": "Elvin Huseynov"
+  "author": "Elvin Huseynov",
+  "homepage": "https://github.com/codewithelvin/screen-co-working"
 }

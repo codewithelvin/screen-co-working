@@ -1,0 +1,76 @@
+# Release builds (D45): pushing a tag v<version> builds the Windows portable exe, the Linux
+# AppImage + .deb and the macOS zips (arm64, x64; only a Mac can build those), and attaches them
+# to a GitHub Release. Locally, `npm --workspace desktop run builds:fetch` then downloads them into
+# ../screen-co-working-builds/<version>/ and writes/pushes the Homebrew cask.
+name: Release builds
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+          - os: ubuntu-latest
+            target: --linux
+          - os: macos-latest
+            target: --mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./desktop/package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != desktop version v$v"; exit 1; }
+      - run: npm ci
+      - run: npm --workspace desktop run build
+      - name: Package
+        working-directory: desktop
+        run: npx electron-builder ${{ matrix.target }} --publish never --config.directories.output=dist
+      - name: Ad-hoc signature is valid
+        if: runner.os == 'macOS'
+        working-directory: desktop
+        run: |
+          for app in dist/mac*/"Screen Co-Working.app"; do codesign --verify --deep --strict "$app" && echo "ok: $app"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: builds-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.zip
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: builds
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l builds
+          gh release create "$GITHUB_REF_NAME" builds/* --repo "$GITHUB_REPOSITORY" \
+            --title "Screen Co-Working ${GITHUB_REF_NAME#v}" \
+            --notes "Windows portable exe, Linux AppImage and .deb, macOS zips (Homebrew: brew install --cask codewithelvin/tap/screen-co-working)."
