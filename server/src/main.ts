@@ -246,7 +246,7 @@ async function applyVoice(code: string): Promise<void> {
       .map((m) => m.identity)
       .filter((id) => {
         const f = fingerprints.get(id);
-        return !!f?.denied && now - f.at < config.fingerprintMaxAgeMs;
+        return config.noMicWhenLocationUnknown && !!f?.denied && now - f.at < config.fingerprintMaxAgeMs;
       }),
   );
   const plan = voicePlan(members, groups, micClaims, unknown);

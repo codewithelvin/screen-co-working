@@ -21,5 +21,11 @@ export const config = {
   proximityThreshold: Number(process.env.PROXIMITY_THRESHOLD ?? 0.5),
   /** A fingerprint older than this no longer counts (clients report every 20 s). */
   fingerprintMaxAgeMs: Number(process.env.FINGERPRINT_MAX_AGE_MS ?? 90_000),
+  /**
+   * Someone whose Wi-Fi scan Windows refuses (location off) gets their own mic, starting muted.
+   * Set to "1" to give them no mic until location is on. Off since the second live test
+   * (2026-11-05): office PCs had location off and people could not talk at all.
+   */
+  noMicWhenLocationUnknown: process.env.NO_MIC_WHEN_LOCATION_UNKNOWN === '1',
   voiceIntervalMs: Number(process.env.VOICE_INTERVAL_MS ?? 5_000),
 };
