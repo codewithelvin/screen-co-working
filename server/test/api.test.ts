@@ -74,6 +74,17 @@ describe('room API', opts, () => {
     assert.equal((await call(`/api/rooms/${data.code}/present`, { ...pass, on: false })).status, 200);
   });
 
+  it('keeps the proximity diagnostics to the server itself', async () => {
+    // The test runs outside the container, so it is "another machine" to the API.
+    const { data } = await call('/api/rooms', { title: 'Proximity test' });
+    assert.equal((await call(`/api/rooms/${data.code}/proximity`)).status, 404);
+  });
+
+  it('answers a malformed update path with 400, not a server error', async () => {
+    const res = await fetch(`http://${API}/updates/%E0%A4%A`);
+    assert.equal(res.status, 400);
+  });
+
   it('does not serve files outside the updates folder', async () => {
     const res = await fetch(`http://${API}/updates/..%2f..%2fetc%2fpasswd`);
     assert.notEqual(res.status, 200);

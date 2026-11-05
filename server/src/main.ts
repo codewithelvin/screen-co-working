@@ -93,7 +93,9 @@ function listRooms() {
 
 /** Wrong room codes per address; guessing a 6-character code is slowed to a crawl. */
 const failedJoins = new Map<string, { count: number; since: number }>();
-const MAX_FAILED_JOINS = 10;
+// Generous: the office network NATs whole subnets to one address (10.255.x → 10.153.92.78, 2026-11-05),
+// so colleagues share a counter. 30 wrong codes a minute still leaves a 6-character code unguessable.
+const MAX_FAILED_JOINS = 30;
 const FAILED_JOIN_WINDOW_MS = 60_000;
 
 function checkJoinRate(ip: string): void {
@@ -107,6 +109,31 @@ function recordFailedJoin(ip: string): void {
   const f = failedJoins.get(ip);
   if (!f || Date.now() - f.since >= FAILED_JOIN_WINDOW_MS) failedJoins.set(ip, { count: 1, since: Date.now() });
   else f.count++;
+}
+
+/** Rooms created per address; a scripted flood of rooms is cut off (each also lives in LiveKit). */
+const creates = new Map<string, { count: number; since: number }>();
+const MAX_CREATES = 60;
+
+function countCreate(ip: string): void {
+  const c = creates.get(ip);
+  if (!c || Date.now() - c.since >= FAILED_JOIN_WINDOW_MS) {
+    creates.set(ip, { count: 1, since: Date.now() });
+    return;
+  }
+  if (++c.count > MAX_CREATES) throw new HttpError(429, 'too many attempts');
+}
+
+// Forget addresses whose window has passed, so the counters don't grow for ever.
+setInterval(() => {
+  const now = Date.now();
+  for (const m of [failedJoins, creates]) {
+    for (const [ip, v] of m) if (now - v.since >= FAILED_JOIN_WINDOW_MS) m.delete(ip);
+  }
+}, FAILED_JOIN_WINDOW_MS).unref();
+
+function isLoopback(ip: string | undefined): boolean {
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
 async function createRoom(body: Record<string, unknown>) {
@@ -382,7 +409,13 @@ const MIME: Record<string, string> = {
 
 /** Static files for electron-updater's generic provider (D19). */
 function serveUpdate(path: string, res: ServerResponse): void {
-  const rel = normalize(decodeURIComponent(path)).replace(/^([/\\])+/, '');
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return send(res, 400, { error: 'bad path' });
+  }
+  const rel = normalize(decoded).replace(/^([/\\])+/, '');
   if (rel.startsWith('..')) return send(res, 400, { error: 'bad path' });
   const file = joinPath(config.updatesDir, rel);
   try {
@@ -409,7 +442,10 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && path === '/api/health') return send(res, 200, { ok: true, app: 'screen-co-working' });
     if (req.method === 'GET' && path === '/api/rooms') return send(res, 200, listRooms());
-    if (req.method === 'POST' && path === '/api/rooms') return send(res, 201, await createRoom(await readJson(req)));
+    if (req.method === 'POST' && path === '/api/rooms') {
+      countCreate(req.socket.remoteAddress ?? '');
+      return send(res, 201, await createRoom(await readJson(req)));
+    }
     if (req.method === 'POST' && path === '/api/join') return send(res, 200, await join(await readJson(req), req));
 
     const m = /^\/api\/rooms\/([A-Z0-9]{4,12})\/(present|action|presence|room-mic)$/.exec(path);
@@ -419,7 +455,12 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await handlers[m[2] as keyof typeof handlers](m[1], body));
     }
     const prox = /^\/api\/rooms\/([A-Z0-9]{4,12})\/proximity$/.exec(path);
-    if (req.method === 'GET' && prox) return send(res, 200, await proximityReport(prox[1]));
+    // Calibration only, from the server itself (`docker exec`): from outside it would tell a code
+    // guesser which rooms exist and who is in them, past the join rate limit.
+    if (req.method === 'GET' && prox) {
+      if (!isLoopback(req.socket.remoteAddress)) return send(res, 404, { error: 'not found' });
+      return send(res, 200, await proximityReport(prox[1]));
+    }
     if (req.method === 'GET' && path.startsWith('/updates/')) return serveUpdate(path.slice('/updates/'.length), res);
     send(res, 404, { error: 'not found' });
   } catch (e) {

@@ -1,3 +1,4 @@
+import { createSocket } from 'node:dgram';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -252,4 +253,32 @@ test('a mic that records only silence is caught; a working one is not', async ()
   await ok.page.getByRole('button', { name: 'Səs cihazları' }).click();
   await expect(ok.page.getByText('Mikrofon', { exact: true })).toBeVisible();
   await expect(ok.page.getByText('Dinamik', { exact: true })).toBeVisible();
+});
+
+test('a malformed or flooding local-share announcement from the LAN does not break the app', async () => {
+  // A private discovery port: unicast to the shared one would land in a real app running on this PC.
+  const port = 41_300 + Math.floor(Math.random() * 500);
+  process.env.SCW_DISCOVERY_PORT = String(port);
+  const viewer = await launch('Aysel', DEAD_SERVER).finally(() => delete process.env.SCW_DISCOVERY_PORT);
+  apps.push(viewer);
+  await expect(viewer.page.locator('.sidebar-status')).toContainText('Yerli rejim');
+
+  const sock = createSocket('udp4');
+  const send = (msg: unknown) =>
+    new Promise<void>((resolve) => sock.send(JSON.stringify(msg), port, '127.0.0.1', () => resolve()));
+  try {
+    // An object as the title would crash React; a bad port and junk are ignored; 100 fakes are capped.
+    await send({ app: 'scw', v: 1, id: 'evil', title: { a: 1 }, presenter: ['x'], port: 5000, viewers: 'lots' });
+    await send({ app: 'scw', v: 1, id: 'bad-port', title: 'Bad', presenter: 'x', port: 99999, viewers: 0 });
+    await send('not json');
+    for (let i = 0; i < 100; i++) await send({ app: 'scw', v: 1, id: `fake-${i}`, title: `Fake ${i}`, presenter: 'x', port: 6000, viewers: 0 });
+  } finally {
+    sock.close();
+  }
+  const rows = viewer.page.locator('.room-row');
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+  await expect(viewer.page.locator('.room-row', { hasText: 'Yerli paylaşım' })).toHaveCount(1);
+  await expect(viewer.page.locator('.room-row', { hasText: 'Bad' })).toHaveCount(0);
+  expect(await rows.count()).toBeLessThanOrEqual(30);
+  await expect(viewer.page.locator('.layout')).toBeVisible();
 });

@@ -39,6 +39,19 @@ const SERVER = process.env.SCW_SERVER || COMPANY_SERVER;
 
 const preload = join(__dirname, '../preload/index.js');
 
+/**
+ * A window only ever shows our own page. Without this, dropping an HTML file or link onto it
+ * would load that page with the app's preload API. Web links open in the browser; nothing else
+ * (file:, ms-settings: and the like from page content) is handed to the OS.
+ */
+function lockDown(win: BrowserWindow): void {
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+}
+
 /** No DevTools in the shipped app; development keeps them. */
 const webPreferences = {
   preload,
@@ -99,10 +112,7 @@ function createMain(): void {
     autoHideMenuBar: true,
     webPreferences,
   });
-  main.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  lockDown(main);
   main.on('closed', () => {
     main = null;
     overlay?.destroy();
@@ -134,6 +144,7 @@ function showOverlay(displayId: string, presenterName: string): void {
     });
     overlay.setAlwaysOnTop(true, 'screen-saver');
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    lockDown(overlay);
     overlay.setIgnoreMouseEvents(true);
     overlay.setContentProtection(true);
     overlay.on('closed', () => (overlay = null));

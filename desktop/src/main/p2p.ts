@@ -9,7 +9,8 @@ import type { LocalSession, SignalMsg } from '../shared/types';
  * WebRTC signalling and announces itself by UDP broadcast; viewers listen for the
  * announcements and connect straight to the presenter. Media then flows peer-to-peer.
  */
-export const DISCOVERY_PORT = 41234;
+// Tests move it (SCW_DISCOVERY_PORT) so they neither hit nor broadcast to real apps on the LAN.
+export const DISCOVERY_PORT = Number(process.env.SCW_DISCOVERY_PORT) || 41234;
 export const MAX_P2P_VIEWERS = 5;
 const ANNOUNCE_EVERY_MS = 2000;
 const FORGET_AFTER_MS = 7000;
@@ -117,6 +118,8 @@ export async function hostStop(): Promise<void> {
 // ---------- viewer side ----------
 
 const sessions = new Map<string, LocalSession & { seen: number }>();
+/** More local shares than this on one LAN is not real use. */
+const MAX_SESSIONS = 30;
 let listener: dgram.Socket | null = null;
 
 export function startDiscovery(): void {
@@ -124,15 +127,22 @@ export function startDiscovery(): void {
   listener = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   listener.on('message', (buf, rinfo) => {
     try {
-      const a = JSON.parse(String(buf)) as Announcement;
+      // Anyone on the LAN can send this: a malformed field must not reach the UI (an object as a
+      // title crashes React), and fake announcements must not grow the list for ever.
+      const a = JSON.parse(String(buf)) as Record<string, unknown>;
       if (a.app !== 'scw' || a.v !== 1) return;
-      sessions.set(a.id, {
-        id: a.id,
-        title: a.title,
-        presenter: a.presenter,
+      const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+      const id = text(a.id, 64);
+      const port = Number(a.port);
+      if (!id || !Number.isInteger(port) || port < 1 || port > 65535) return;
+      if (!sessions.has(id) && sessions.size >= MAX_SESSIONS) return;
+      sessions.set(id, {
+        id,
+        title: text(a.title, 60) || 'Yerli paylaşım',
+        presenter: text(a.presenter, 40),
         address: rinfo.address,
-        port: a.port,
-        viewers: a.viewers,
+        port,
+        viewers: Math.max(0, Math.min(MAX_P2P_VIEWERS, Number(a.viewers) || 0)),
         seen: Date.now(),
       });
     } catch {
