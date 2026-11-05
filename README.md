@@ -82,9 +82,19 @@ Tuning on the server: `PROXIMITY_THRESHOLD` (default 0.5, 0..1 similarity of two
    writes the Homebrew cask, and pushes it to `codewithelvin/homebrew-tap` when a clone of that repo sits at
    `../screen-co-working-builds/homebrew-tap`.
 3. `cd desktop && node scripts/publish-update.mts <updates-dir>` copies the exe, AppImage and .deb from the
-   builds folder and writes `latest.json` with SHA-256 checksums. Upload the files first, then `latest.json`.
-3. Running apps check `http://<server>:8080/updates/latest.json` at start and every 30 minutes. They
-   download in the background and offer "Yenidən başlat" (restart) to swap the file in place.
+   builds folder and writes `latest.json` with SHA-256 checksums, **signed with the release key**.
+   Upload the files first, then `latest.json`.
+4. Running apps check `http://<server>:8090/updates/latest.json` at start, every 5 minutes and when the
+   user leaves a room. They download in the background and offer "Yenilə" in the sidebar footer
+   (and "Yenidən başlat" in a notice) to swap the file in place.
+
+**Release key (signed updates, from 0.3.7).** Apps accept an update only if `latest.json` is signed
+with the release key, whose public half is `UPDATE_PUBLIC_KEY` in `desktop/src/shared/config.ts`. The
+private half lives only on the release PC at `~/.screen-co-working/update-signing-key.pem` (or
+`SCW_UPDATE_KEY`); it is never committed and never copied to the server, so neither a spoofed server
+nor someone who can write to the updates folder can push an exe. **Keep a backup of that file**
+(e.g. a password manager): without it, apps from 0.3.7 on can only be updated by hand. Publishing
+refuses to run without the key. `node scripts/update-key.mts` creates one only if none exists.
 
 **Forcing an update.** Add `--min <version>` when publishing (`node scripts/publish-update.mts <dir> <release-dir> --min 0.2.1`).
 `latest.json` then carries `minVersion`, and the server refuses `/api/join` from any older app (HTTP 426).
