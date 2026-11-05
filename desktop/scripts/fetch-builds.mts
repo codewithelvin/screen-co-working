@@ -73,10 +73,11 @@ if (existsSync(join(tap, '.git'))) {
   mkdirSync(join(tap, 'Casks'), { recursive: true });
   writeFileSync(join(tap, 'Casks', 'screen-co-working.rb'), cask);
   const git = (...args: string[]) => execFileSync('git', ['-C', tap, ...args], { stdio: 'inherit' });
-  git('pull', '--ff-only');
+  const hasRemoteBranch = execFileSync('git', ['-C', tap, 'ls-remote', '--heads', 'origin', 'main']).length > 0;
+  if (hasRemoteBranch) git('pull', '--ff-only', 'origin', 'main');
   git('add', 'Casks/screen-co-working.rb');
   git('commit', '-m', `screen-co-working ${version}`);
-  git('push');
+  git('push', '-u', 'origin', 'main');
   console.log('tap updated: brew update && brew upgrade --cask screen-co-working');
 } else {
   console.log(`no tap clone at ${tap}; cask not pushed`);
