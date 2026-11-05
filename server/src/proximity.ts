@@ -18,9 +18,12 @@ export interface Fingerprint {
   aps: AccessPoint[];
   /** When it was reported (ms). */
   at: number;
+  /** The OS refused the scan (Windows location access off): we can't tell where this person sits. */
+  denied?: boolean;
 }
 
-export type VoiceRole = 'remote' | 'room-mic' | 'group';
+/** unknown: the scan was refused, so no mic until location access is on (D36, 2026-11-05). */
+export type VoiceRole = 'remote' | 'room-mic' | 'group' | 'unknown';
 
 export interface VoiceMember {
   identity: string;
@@ -97,9 +100,10 @@ export function voicePlan(
   members: VoiceMember[],
   groups: string[][],
   claims: ReadonlyMap<string, number>,
+  unknown: ReadonlySet<string> = new Set(),
 ): Map<string, VoicePlanEntry> {
   const plan = new Map<string, VoicePlanEntry>();
-  for (const m of members) plan.set(m.identity, { role: 'remote', group: '', roomMic: '' });
+  for (const m of members) plan.set(m.identity, { role: unknown.has(m.identity) ? 'unknown' : 'remote', group: '', roomMic: '' });
   const byId = new Map(members.map((m) => [m.identity, m]));
 
   for (const g of groups) {

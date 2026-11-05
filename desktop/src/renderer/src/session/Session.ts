@@ -1,4 +1,4 @@
-import type { AnnoEvent, AnnoMsg, ScreenSource, VoiceRole } from '../../../shared/types';
+import type { AnnoEvent, AnnoMsg, ScreenSource, VoiceRole, WifiScan } from '../../../shared/types';
 
 export interface Person {
   id: string;
@@ -29,6 +29,10 @@ export interface Snapshot {
   voice: VoiceRole;
   roomMic: string;
   micOn: boolean;
+  /** Why the Wi-Fi scan came back empty, if it did (shown next to the mic control). */
+  wifi: WifiScan['status'] | null;
+  /** LiveKit lost the connection and is restoring it (e.g. after a Wi-Fi roam). */
+  reconnecting: boolean;
 }
 
 export type HostAction = 'kick' | 'stopShare' | 'end';
@@ -55,6 +59,8 @@ export abstract class Session {
       voice: init.mode === 'p2p' ? 'off' : 'pending',
       roomMic: '',
       micOn: false,
+      wifi: null,
+      reconnecting: false,
     };
   }
 

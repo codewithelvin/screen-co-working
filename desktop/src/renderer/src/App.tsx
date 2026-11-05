@@ -1,7 +1,7 @@
 import { App as AntApp, Flex, Spin } from 'antd';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { LocalSession, ScreenSource, Settings, UpdateState } from '../../shared/types';
-import { ApiError, api, type RoomInfo } from './api';
+import { ApiError, api } from './api';
 import { ScreenPicker } from './components/ScreenPicker';
 import { Setup } from './components/Setup';
 import { Sidebar } from './components/Sidebar';
@@ -11,7 +11,7 @@ import { LiveKitSession } from './session/LiveKitSession';
 import { P2PHostSession, P2PViewerSession } from './session/P2PSession';
 import type { HostAction, Session, Snapshot } from './session/Session';
 
-const ROOMS_POLL_MS = 3000;
+const HEALTH_POLL_MS = 3000;
 const LOCAL_POLL_MS = 2000;
 
 const noop = () => () => {};
@@ -27,7 +27,6 @@ export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [serverUp, setServerUp] = useState<boolean | null>(null);
-  const [rooms, setRooms] = useState<RoomInfo[]>([]);
   const [localSessions, setLocalSessions] = useState<LocalSession[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,6 +45,13 @@ export function App() {
 
   const snap = useSyncExternalStore(session?.subscribe ?? noop, session?.getSnapshot ?? nothing);
 
+  // While watching a shared screen the sidebar folds away for space; the user can open it again,
+  // and that choice holds until watching starts or stops.
+  const watching = !!snap?.remoteStream && !snap.presenting;
+  const [sidebarChoice, setSidebarChoice] = useState<{ watching: boolean; open: boolean } | null>(null);
+  const sidebarOpen = sidebarChoice?.watching === watching ? sidebarChoice.open : !watching;
+  const toggleSidebar = () => setSidebarChoice({ watching, open: !sidebarOpen });
+
   useEffect(() => {
     void window.scw.getSettings().then((s) => {
       setSettings(s);
@@ -53,23 +59,20 @@ export function App() {
     });
   }, []);
 
-  // Room list from the server; when it can't be reached, fall back to local discovery (D10).
+  // Is the server reachable? If not, fall back to local discovery (D10). Rooms are private (D46): no list.
   useEffect(() => {
     if (!settings) return;
     let stop = false;
     const tick = async () => {
       try {
-        const list = await api.rooms(settings.server);
-        if (!stop) {
-          setRooms(list);
-          setServerUp(true);
-        }
+        await api.health(settings.server);
+        if (!stop) setServerUp(true);
       } catch {
         if (!stop) setServerUp(false);
       }
     };
     void tick();
-    const t = setInterval(() => void tick(), ROOMS_POLL_MS);
+    const t = setInterval(() => void tick(), HEALTH_POLL_MS);
     return () => {
       stop = true;
       clearInterval(t);
@@ -216,10 +219,10 @@ export function App() {
 
   return (
     <div className="layout">
+      {sidebarOpen && (
       <Sidebar
         name={settings.name}
         serverUp={serverUp}
-        rooms={rooms}
         localSessions={localSessions}
         snap={snap}
         busy={busy}
@@ -230,9 +233,12 @@ export function App() {
         onHostAction={(a, t) => void hostAction(a, t)}
         onSettings={() => setSetupOpen(true)}
       />
+      )}
       <Stage
         session={session}
         snap={snap}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={toggleSidebar}
         busy={busy}
         onShare={() => setPicker({ kind: 'room' })}
         onLeave={() => void leave()}

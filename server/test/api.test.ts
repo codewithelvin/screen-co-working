@@ -22,14 +22,14 @@ describe('room API', opts, () => {
     assert.equal(r.data.ok, true);
   });
 
-  it('creates a room that shows up in the list and can be joined', async () => {
+  it('creates a private room: not listed, joinable with the code', async () => {
     const created = await call('/api/rooms', { title: 'API test' });
     assert.equal(created.status, 201);
     const code = created.data.code as string;
     assert.match(code, /^[A-Z2-9]{6}$/);
 
     const list = await fetch(`http://${API}/api/rooms`).then((r) => r.json() as Promise<{ code: string; title: string }[]>);
-    assert.ok(list.some((r) => r.code === code && r.title === 'API test'));
+    assert.equal(list.length, 0);
 
     const join = await call('/api/join', { code: code.toLowerCase(), name: 'Tester', hostname: 'PC-1' });
     assert.equal(join.status, 200);

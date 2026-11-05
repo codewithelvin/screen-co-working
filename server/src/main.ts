@@ -76,27 +76,30 @@ function currentPresenter(code: string, participants: ParticipantInfo[]): string
   return id;
 }
 
-async function listRooms() {
-  const list = (await rooms.listRooms()).filter((r) => r.name.startsWith(config.roomPrefix));
-  const result = [];
-  for (const r of list) {
-    const code = r.name.slice(config.roomPrefix.length);
-    const participants = await participantsOf(code);
-    const host = hostOf(participants);
-    const presenter = currentPresenter(code, participants);
-    result.push({
-      code,
-      title: roomTitle(r.metadata, code),
-      createdAt: Number(r.creationTime) * 1000,
-      participants: participants.map((p) => ({
-        identity: p.identity,
-        name: p.name,
-        host: p.identity === host?.identity,
-        presenting: p.identity === presenter || isPresenting(p),
-      })),
-    });
+/**
+ * Rooms are private (D46): only someone who has the code can join, so nothing lists them.
+ * Apps up to 0.3.1 still poll this to see whether the server is up, so it answers with no rooms.
+ */
+function listRooms() {
+  return [];
+}
+
+/** Wrong room codes per address; guessing a 6-character code is slowed to a crawl. */
+const failedJoins = new Map<string, { count: number; since: number }>();
+const MAX_FAILED_JOINS = 10;
+const FAILED_JOIN_WINDOW_MS = 60_000;
+
+function checkJoinRate(ip: string): void {
+  const f = failedJoins.get(ip);
+  if (f && Date.now() - f.since < FAILED_JOIN_WINDOW_MS && f.count >= MAX_FAILED_JOINS) {
+    throw new HttpError(429, 'too many attempts');
   }
-  return result.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function recordFailedJoin(ip: string): void {
+  const f = failedJoins.get(ip);
+  if (!f || Date.now() - f.since >= FAILED_JOIN_WINDOW_MS) failedJoins.set(ip, { count: 1, since: Date.now() });
+  else f.count++;
 }
 
 async function createRoom(body: Record<string, unknown>) {
@@ -136,8 +139,13 @@ async function join(body: Record<string, unknown>, req: IncomingMessage) {
   const name = str(body.name, 'name', 40);
   const hostname = typeof body.hostname === 'string' ? body.hostname.trim().slice(0, 40) : '';
 
+  const ip = req.socket.remoteAddress ?? '';
+  checkJoinRate(ip);
   const existing = await rooms.listRooms([lk(code)]);
-  if (existing.length === 0) throw new HttpError(404, 'room not found');
+  if (existing.length === 0) {
+    recordFailedJoin(ip);
+    throw new HttpError(404, 'room not found');
+  }
   const participants = await participantsOf(code);
   if (participants.length >= MAX_PARTICIPANTS) throw new HttpError(409, 'room is full');
 
@@ -232,11 +240,20 @@ async function applyVoice(code: string): Promise<void> {
     fingerprints,
     { now: Date.now(), maxAgeMs: config.fingerprintMaxAgeMs, threshold: config.proximityThreshold },
   );
-  const plan = voicePlan(members, groups, micClaims);
+  const now = Date.now();
+  const unknown = new Set(
+    members
+      .map((m) => m.identity)
+      .filter((id) => {
+        const f = fingerprints.get(id);
+        return !!f?.denied && now - f.at < config.fingerprintMaxAgeMs;
+      }),
+  );
+  const plan = voicePlan(members, groups, micClaims, unknown);
   for (const [identity, entry] of plan) {
     const key = `${entry.role}|${entry.group}|${entry.roomMic}`;
     if (appliedRoles.get(identity) === key) continue;
-    const mic = entry.role !== 'group';
+    const mic = entry.role === 'remote' || entry.role === 'room-mic';
     await rooms
       .updateParticipant(lk(code), identity, {
         permission: {
@@ -286,7 +303,7 @@ async function proximityReport(code: string) {
 /** A client reports its Wi-Fi fingerprint (an empty list when it has no Wi-Fi). */
 async function presence(code: string, body: Record<string, unknown>) {
   const identity = authenticate(code, body);
-  fingerprints.set(identity, { aps: readAccessPoints(body.aps), at: Date.now() });
+  fingerprints.set(identity, { aps: readAccessPoints(body.aps), at: Date.now(), denied: body.wifi === 'denied' });
   voiceRooms.add(code);
   await applyVoice(code);
   return { ok: true };
@@ -377,7 +394,7 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
     if (req.method === 'GET' && path === '/api/health') return send(res, 200, { ok: true, app: 'screen-co-working' });
-    if (req.method === 'GET' && path === '/api/rooms') return send(res, 200, await listRooms());
+    if (req.method === 'GET' && path === '/api/rooms') return send(res, 200, listRooms());
     if (req.method === 'POST' && path === '/api/rooms') return send(res, 201, await createRoom(await readJson(req)));
     if (req.method === 'POST' && path === '/api/join') return send(res, 200, await join(await readJson(req), req));
 

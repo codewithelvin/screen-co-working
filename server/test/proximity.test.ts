@@ -79,6 +79,12 @@ describe('voicePlan (D36, D38)', () => {
     assert.equal(plan.get('b')?.role, 'group');
   });
 
+  it('someone whose Wi-Fi scan was refused gets no mic (unknown)', () => {
+    const plan = voicePlan([member('a', 1n), member('b', 2n)], [['a'], ['b']], new Map(), new Set(['b']));
+    assert.equal(plan.get('a')?.role, 'remote');
+    assert.equal(plan.get('b')?.role, 'unknown');
+  });
+
   it('someone alone may talk', () => {
     const plan = voicePlan([member('a', 1n), member('b', 2n)], [['a'], ['b']], new Map());
     assert.equal(plan.get('a')?.role, 'remote');

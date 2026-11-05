@@ -1,5 +1,14 @@
-import { CopyOutlined, DesktopOutlined, LogoutOutlined, PauseOutlined, PoweroffOutlined, StopOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Flex, Popconfirm, Space, Tag, Typography } from 'antd';
+import {
+  CopyOutlined,
+  DesktopOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PauseOutlined,
+  PoweroffOutlined,
+  StopOutlined,
+} from '@ant-design/icons';
+import { Alert, Button, Empty, Flex, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd';
 import type { HostAction, Session, Snapshot } from '../session/Session';
 import { MicControl } from './MicControl';
 import { Viewer } from './Viewer';
@@ -8,6 +17,8 @@ interface Props {
   session: Session | null;
   snap: Snapshot | null;
   busy: boolean;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
   onShare: () => void;
   onLeave: () => void;
   onHostAction: (action: HostAction, target?: string) => void;
@@ -63,7 +74,7 @@ function PresenterPanel({ snap, onPause, onStop }: { snap: Snapshot; onPause: (p
   );
 }
 
-export function Stage({ session, snap, busy, onShare, onLeave, onHostAction, onPause, onStop }: Props) {
+export function Stage({ session, snap, busy, sidebarOpen, onToggleSidebar, onShare, onLeave, onHostAction, onPause, onStop }: Props) {
   if (!session || !snap) {
     return (
       <Flex className="stage" align="center" justify="center">
@@ -79,6 +90,15 @@ export function Stage({ session, snap, busy, onShare, onLeave, onHostAction, onP
     <Flex vertical className="stage">
       <Flex align="center" justify="space-between" className="stage-head">
         <Space size={12}>
+          <Tooltip title={sidebarOpen ? 'Yan paneli gizlət' : 'Yan paneli göstər'}>
+            <Button
+              type="text"
+              size="small"
+              aria-label={sidebarOpen ? 'Yan paneli gizlət' : 'Yan paneli göstər'}
+              icon={sidebarOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+              onClick={onToggleSidebar}
+            />
+          </Tooltip>
           <Typography.Text strong className="stage-title">
             {snap.title}
           </Typography.Text>
@@ -111,6 +131,14 @@ export function Stage({ session, snap, busy, onShare, onLeave, onHostAction, onP
         </Space>
       </Flex>
 
+      {snap.reconnecting && (
+        <Alert
+          banner
+          type="warning"
+          showIcon
+          title="Bağlantı bərpa olunur… Wi-Fi şəbəkəsi dəyişdi və ya qısa müddətə kəsildi."
+        />
+      )}
       {snap.presenting ? (
         <PresenterPanel snap={snap} onPause={onPause} onStop={onStop} />
       ) : presenter && snap.remoteStream ? (

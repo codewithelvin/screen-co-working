@@ -92,10 +92,15 @@ test('host stops someone else’s share', async () => {
   await shareFirstScreen(guest.page);
   await expect.poll(() => videoWidth(host.page), { timeout: 15_000 }).toBeGreaterThan(1000);
 
+  // Watching folds the sidebar away for space; the header button brings it back.
+  await expect(host.page.locator('.sidebar')).toHaveCount(0);
+  await host.page.getByRole('button', { name: 'Yan paneli göstər' }).click();
   await host.page.locator('.person-row', { hasText: 'Aysel' }).getByRole('button').click();
   await host.page.getByText('Paylaşımı dayandır').click();
   await expect(guest.page.getByText('Ekranınız paylaşılır')).toHaveCount(0, { timeout: 10_000 });
   await expect(host.page.getByText('Hələ heç kim ekranını paylaşmır')).toBeVisible({ timeout: 10_000 });
+  // The share is over, so the sidebar is back by itself.
+  await expect(host.page.locator('.sidebar')).toBeVisible();
 });
 
 test('same name gets the computer name; host role passes on when the host leaves', async () => {

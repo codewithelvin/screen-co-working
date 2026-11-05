@@ -12,8 +12,15 @@ export interface AccessPoint {
   s: number;
 }
 
+/** A Wi-Fi scan; `denied` = Windows location access is off for desktop apps, so no access points. */
+export interface WifiScan {
+  status: 'ok' | 'denied' | 'no-wifi' | 'unavailable';
+  aps: AccessPoint[];
+}
+
 /** Voice role set by the server (D36–D38); 'pending' until it has placed us, 'off' in P2P mode. */
-export type VoiceRole = 'pending' | 'off' | 'remote' | 'room-mic' | 'group';
+/** unknown: the Wi-Fi scan was refused (location off), so the server gives no mic. */
+export type VoiceRole = 'pending' | 'off' | 'remote' | 'room-mic' | 'group' | 'unknown';
 
 export interface ScreenSource {
   id: string;
@@ -82,7 +89,9 @@ export interface ScwApi {
   overlayHide(): Promise<void>;
   overlayEvent(e: AnnoEvent): void;
   muteNotifications(mute: boolean): Promise<NotifyMuteResult>;
-  wifiFingerprint(): Promise<AccessPoint[]>;
+  wifiFingerprint(): Promise<WifiScan>;
+  /** Opens the OS page where location access for desktop apps is switched on. */
+  openLocationSettings(): Promise<void>;
   // P2P presenter side
   p2pHostStart(title: string, presenter: string): Promise<void>;
   p2pHostStop(): Promise<void>;

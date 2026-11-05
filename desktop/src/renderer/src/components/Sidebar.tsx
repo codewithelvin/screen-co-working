@@ -11,13 +11,11 @@ import {
 import { Badge, Button, Dropdown, Flex, Input, Modal, Space, Tag, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
 import type { LocalSession } from '../../../shared/types';
-import type { RoomInfo } from '../api';
 import type { HostAction, Snapshot } from '../session/Session';
 
 interface Props {
   name: string;
   serverUp: boolean | null;
-  rooms: RoomInfo[];
   localSessions: LocalSession[];
   snap: Snapshot | null;
   busy: boolean;
@@ -96,25 +94,21 @@ export function Sidebar(p: Props) {
                 Qoşul
               </Button>
             </Space.Compact>
-            {p.rooms.length === 0 && <div className="muted-row">Açıq otaq yoxdur</div>}
-            {p.rooms.map((r) => {
-              const active = p.snap?.mode === 'server' && p.snap.code === r.code;
-              const presenter = r.participants.find((x) => x.presenting);
-              return (
-                <button
-                  key={r.code}
-                  className={`room-row${active ? ' active' : ''}`}
-                  disabled={p.busy || active}
-                  onClick={() => void p.onJoinRoom(r.code)}
-                >
-                  <Badge status={presenter ? 'processing' : 'default'} />
-                  <span className="room-title">{r.title}</span>
-                  <span className="room-count">
-                    <TeamOutlined /> {r.participants.length}
-                  </span>
-                </button>
-              );
-            })}
+            {/* Rooms are private (D46): no list, only the code. */}
+            {p.snap?.mode === 'server' ? (
+              <div className="room-row active">
+                <Badge status={p.snap.people.some((x) => x.presenting) ? 'processing' : 'default'} />
+                <span className="room-title">
+                  {p.snap.title}
+                  <span className="room-sub">Kod: {p.snap.code}</span>
+                </span>
+                <span className="room-count">
+                  <TeamOutlined /> {p.snap.people.length}
+                </span>
+              </div>
+            ) : (
+              <div className="muted-row">Otaqlar gizlidir: qoşulmaq üçün kodu daxil edin və ya yeni otaq yaradın.</div>
+            )}
           </>
         ) : p.serverUp === false ? (
           <>

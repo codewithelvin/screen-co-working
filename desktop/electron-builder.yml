@@ -20,7 +20,8 @@ win:
   artifactName: Screen-Co-Working-${version}-win-portable.exe
 portable:
   requestExecutionLevel: user
-  unpackDirName: ScreenCoWorking
+  # A fresh temp folder per launch: a second launch must never overwrite the files of a running copy.
+  unpackDirName: false
 linux:
   target: [AppImage, deb]
   category: Office

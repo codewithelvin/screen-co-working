@@ -9,9 +9,22 @@ import * as p2p from './p2p';
 import { setupPortableData } from './portable';
 import { load, save } from './settings';
 import { checkForUpdate, installUpdate } from './updater';
-import { wifiFingerprint } from './wifi';
+import { stopWifiHelper, wifiFingerprint } from './wifi';
 
 setupPortableData();
+
+// One copy per data folder: a second launch (e.g. a double-click while the slow portable exe is
+// still unpacking) only brings the running window forward. Before this, a second launch could
+// take down a copy that was sharing (2026-11-05, room 310).
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+}
+app.on('second-instance', () => {
+  if (!main) return;
+  if (main.isMinimized()) main.restore();
+  main.show();
+  main.focus();
+});
 
 // P2P mode connects by LAN IP; Chromium would otherwise hide host candidates behind mDNS names.
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
@@ -176,6 +189,11 @@ function registerIpc(): void {
 
   ipcMain.handle('notify:mute', (_e, mute: boolean) => muteNotifications(mute));
   ipcMain.handle('wifi:fingerprint', () => wifiFingerprint());
+  ipcMain.handle('wifi:location-settings', () =>
+    shell.openExternal(
+      process.platform === 'win32' ? 'ms-settings:privacy-location' : 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
+    ),
+  );
 
   ipcMain.handle('p2p:host-start', (_e, title: string, presenter: string) =>
     p2p.hostStart(
@@ -226,6 +244,7 @@ void app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  stopWifiHelper();
   void p2p.hostStop();
   void restoreNotifications();
 });

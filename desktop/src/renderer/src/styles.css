@@ -79,3 +79,4 @@ html, body, #root, #root > .ant-app { margin: 0; height: 100%; background: var(-
 /* update gate */
 .update-gate { text-align: center; padding: 8px 4px; }
 .update-gate-icon { font-size: 40px; color: var(--scw-primary); }
+.kbd { margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; opacity: .8; }

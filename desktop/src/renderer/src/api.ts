@@ -1,13 +1,6 @@
 /** Client for the room API on the LAN server. */
 
-import type { AccessPoint } from '../../shared/types';
-
-export interface RoomInfo {
-  code: string;
-  title: string;
-  createdAt: number;
-  participants: { identity: string; name: string; host: boolean; presenting: boolean }[];
-}
+import type { WifiScan } from '../../shared/types';
 
 export interface JoinInfo {
   token: string;
@@ -30,6 +23,7 @@ const MESSAGES: Record<string, string> = {
   'not authorised': 'İcazə yoxdur.',
   'relay server unavailable': 'Media server cavab vermir.',
   'update required': 'Proqramın yeni versiyası tələb olunur.',
+  'too many attempts': 'Çox sayda yanlış kod. Bir dəqiqə sonra yenidən cəhd edin.',
 };
 
 function base(server: string): string {
@@ -61,14 +55,13 @@ async function call<T>(server: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   health: (server: string) => call<{ ok: boolean }>(server, '/api/health'),
-  rooms: (server: string) => call<RoomInfo[]>(server, '/api/rooms'),
   createRoom: (server: string, title: string) => call<{ code: string; title: string }>(server, '/api/rooms', { title }),
   join: (server: string, code: string, name: string, hostname: string) =>
     call<JoinInfo>(server, '/api/join', { code, name, hostname, version: window.scw.version }),
   present: (server: string, code: string, j: JoinInfo, on: boolean) =>
     call(server, `/api/rooms/${code}/present`, { identity: j.identity, secret: j.secret, on }),
-  presence: (server: string, code: string, j: JoinInfo, aps: AccessPoint[]) =>
-    call(server, `/api/rooms/${code}/presence`, { identity: j.identity, secret: j.secret, aps }),
+  presence: (server: string, code: string, j: JoinInfo, scan: WifiScan) =>
+    call(server, `/api/rooms/${code}/presence`, { identity: j.identity, secret: j.secret, aps: scan.aps, wifi: scan.status }),
   takeRoomMic: (server: string, code: string, j: JoinInfo) =>
     call(server, `/api/rooms/${code}/room-mic`, { identity: j.identity, secret: j.secret }),
   action: (server: string, code: string, j: JoinInfo, action: string, target?: string) =>

@@ -16,7 +16,9 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 /** How often the Wi-Fi fingerprint is re-sent; the server forgets it after 90 s. */
 const PRESENCE_MS = 20_000;
-const ROLES: VoiceRole[] = ['remote', 'room-mic', 'group'];
+const ROLES: VoiceRole[] = ['remote', 'room-mic', 'group', 'unknown'];
+/** Roles that may not transmit, and that hear the room through someone else's laptop or not yet. */
+const SILENT: VoiceRole[] = ['group', 'pending', 'unknown'];
 
 function roleOf(p: Participant): VoiceRole {
   const v = p.attributes.voice as VoiceRole;
@@ -75,6 +77,12 @@ export class LiveKitSession extends Session {
         if (pub.source === Track.Source.ScreenShare && pub.track && !pub.track.isLocal) this.update({ paused: false });
       })
       .on(RoomEvent.DataReceived, (payload, participant) => this.onData(payload, participant))
+      .on(RoomEvent.Reconnecting, () => this.update({ reconnecting: true }))
+      .on(RoomEvent.SignalReconnecting, () => this.update({ reconnecting: true }))
+      .on(RoomEvent.Reconnected, () => {
+        this.update({ reconnecting: false });
+        void this.reportPresence();
+      })
       .on(RoomEvent.Disconnected, (reason) => {
         clearInterval(this.presenceTimer);
         for (const t of [...this.audio.keys()]) this.stopVoice(t);
@@ -97,15 +105,16 @@ export class LiveKitSession extends Session {
 
   /** Send my Wi-Fi fingerprint; the server decides who sits together (D37). */
   private async reportPresence(): Promise<void> {
-    const aps = await window.scw.wifiFingerprint().catch(() => []);
+    const scan = await window.scw.wifiFingerprint().catch(() => ({ status: 'unavailable' as const, aps: [] }));
     if (this.room.state !== 'connected') return;
-    await api.presence(this.server, this.snap.code, this.join, aps).catch(() => undefined);
+    if (scan.status !== this.snap.wifi) this.update({ wifi: scan.status });
+    await api.presence(this.server, this.snap.code, this.join, scan).catch(() => undefined);
   }
 
   /** The server changed someone's voice role; a silent group member must not transmit (D36). */
   private async onVoiceChanged(): Promise<void> {
     const voice = roleOf(this.room.localParticipant);
-    if ((voice === 'group' || voice === 'pending') && this.room.localParticipant.isMicrophoneEnabled) {
+    if (SILENT.includes(voice) && this.room.localParticipant.isMicrophoneEnabled) {
       await this.room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
     }
     this.refresh();
@@ -113,7 +122,7 @@ export class LiveKitSession extends Session {
 
   /** People in a group hear the room through the room-mic laptop, not their own (D38). */
   private get voiceMuted(): boolean {
-    return this.snap.voice === 'group' || this.snap.voice === 'pending';
+    return SILENT.includes(this.snap.voice);
   }
 
   private playVoice(track: RemoteTrack): void {
@@ -257,7 +266,7 @@ export class LiveKitSession extends Session {
   }
 
   async setMic(on: boolean): Promise<void> {
-    if (on && (this.snap.voice === 'group' || this.snap.voice === 'pending')) return;
+    if (on && SILENT.includes(this.snap.voice)) return;
     await this.room.localParticipant.setMicrophoneEnabled(on, { echoCancellation: true, noiseSuppression: true });
     this.refresh();
   }
