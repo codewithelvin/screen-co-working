@@ -2,7 +2,7 @@
 
 export interface Settings {
   name: string;
-  /** Room API address, e.g. "192.168.1.10:8080". */
+  /** Room API address. Fixed (COMPANY_SERVER, D35); read-only for the UI. */
   server: string;
 }
 
@@ -62,8 +62,10 @@ export interface ScwApi {
   platform: NodeJS.Platform;
   hostname: string;
   version: string;
+  /** First-run name suggestion from the OS login. */
+  suggestedName: string;
   getSettings(): Promise<Settings>;
-  saveSettings(s: Settings): Promise<void>;
+  saveSettings(s: Pick<Settings, 'name'>): Promise<void>;
   listScreens(): Promise<ScreenSource[]>;
   chooseScreen(id: string): Promise<void>;
   overlayShow(displayId: string, presenterName: string): Promise<void>;

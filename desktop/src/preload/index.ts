@@ -7,12 +7,13 @@ function listen<A extends unknown[]>(channel: string, cb: (...args: A) => void):
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
-const info = ipcRenderer.sendSync('app:info') as { hostname: string; version: string };
+const info = ipcRenderer.sendSync('app:info') as { hostname: string; version: string; suggestedName: string };
 
 const api: ScwApi = {
   platform: process.platform,
   hostname: info.hostname,
   version: info.version,
+  suggestedName: info.suggestedName,
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (s) => ipcRenderer.invoke('settings:save', s),
   listScreens: () => ipcRenderer.invoke('screens:list'),

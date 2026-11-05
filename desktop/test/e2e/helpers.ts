@@ -12,13 +12,16 @@ export interface AppHandle {
   page: Page;
 }
 
-/** Start an app instance with its own settings folder (SCW_DATA_DIR). */
-export async function launch(settings: { name: string; server: string } | null): Promise<AppHandle> {
+/**
+ * Start an app instance with its own settings folder (SCW_DATA_DIR). The server is fixed in the
+ * build; tests point it at the test stack with SCW_SERVER. A null name means first run.
+ */
+export async function launch(name: string | null, server = API): Promise<AppHandle> {
   const dir = mkdtempSync(join(tmpdir(), 'scw-e2e-'));
-  if (settings) writeFileSync(join(dir, 'settings.json'), JSON.stringify(settings));
+  if (name) writeFileSync(join(dir, 'settings.json'), JSON.stringify({ name }));
   const app = await electron.launch({
     args: [join(__dirname, '..', '..')],
-    env: { ...process.env, SCW_DATA_DIR: dir },
+    env: { ...process.env, SCW_DATA_DIR: dir, SCW_SERVER: server },
   });
   const page = await app.firstWindow();
   await page.waitForSelector('.layout');

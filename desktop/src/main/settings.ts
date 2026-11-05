@@ -1,9 +1,9 @@
 import { app } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Settings } from '../shared/types';
 
-interface Stored extends Settings {
+interface Stored {
+  name: string;
   /** Saved OS notification state while we have it muted, restored after a crash (D14). */
   notifyBackup?: string;
 }
@@ -12,9 +12,10 @@ const file = () => join(app.getPath('userData'), 'settings.json');
 
 export function load(): Stored {
   try {
-    return { name: '', server: '', ...(JSON.parse(readFileSync(file(), 'utf8')) as Partial<Stored>) };
+    const { name, notifyBackup } = JSON.parse(readFileSync(file(), 'utf8')) as Partial<Stored>;
+    return { name: name ?? '', notifyBackup };
   } catch {
-    return { name: '', server: '' };
+    return { name: '' };
   }
 }
 

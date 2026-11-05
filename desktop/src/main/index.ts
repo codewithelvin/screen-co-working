@@ -1,6 +1,8 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell } from 'electron';
-import { hostname } from 'node:os';
+import { hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { COMPANY_SERVER } from '../shared/config';
+import { suggestName } from '../shared/names-suggest';
 import type { AnnoEvent, ScreenSource, Settings, SignalMsg, UpdateState } from '../shared/types';
 import { muteNotifications, restoreNotifications } from './notifications';
 import * as p2p from './p2p';
@@ -16,6 +18,9 @@ app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 let main: BrowserWindow | null = null;
 let overlay: BrowserWindow | null = null;
 let chosenScreen: string | null = null;
+
+/** Fixed company server (D35); SCW_SERVER only for tests and development. */
+const SERVER = process.env.SCW_SERVER || COMPANY_SERVER;
 
 const preload = join(__dirname, '../preload/index.js');
 
@@ -91,15 +96,17 @@ function emitUpdate(s: UpdateState): void {
 
 function registerIpc(): void {
   ipcMain.on('app:info', (e) => {
-    e.returnValue = { hostname: hostname().slice(0, 40), version: app.getVersion() };
+    e.returnValue = {
+      hostname: hostname().slice(0, 40),
+      version: app.getVersion(),
+      suggestedName: suggestName(userInfo().username, hostname()),
+    };
   });
   ipcMain.handle('settings:get', (): Settings => {
-    const { name, server } = load();
-    return { name, server };
+    return { name: load().name, server: SERVER };
   });
-  ipcMain.handle('settings:save', (_e, s: Settings) => {
-    save({ name: String(s.name).slice(0, 40), server: String(s.server).slice(0, 200) });
-    void checkForUpdate(s.server, emitUpdate);
+  ipcMain.handle('settings:save', (_e, s: Pick<Settings, 'name'>) => {
+    save({ name: String(s.name).slice(0, 40) });
   });
 
   ipcMain.handle('screens:list', async (): Promise<ScreenSource[]> => {
@@ -162,9 +169,8 @@ void app.whenReady().then(async () => {
   p2p.startDiscovery();
   createMain();
 
-  const { server } = load();
-  main?.webContents.once('did-finish-load', () => void checkForUpdate(server, emitUpdate));
-  setInterval(() => void checkForUpdate(load().server, emitUpdate), 30 * 60 * 1000);
+  main?.webContents.once('did-finish-load', () => void checkForUpdate(SERVER, emitUpdate));
+  setInterval(() => void checkForUpdate(SERVER, emitUpdate), 30 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMain();

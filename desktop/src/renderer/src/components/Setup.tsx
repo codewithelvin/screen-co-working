@@ -1,40 +1,15 @@
 import { Button, Form, Input, Modal, Typography } from 'antd';
-import { useState } from 'react';
-import type { Settings } from '../../../shared/types';
-import { api } from '../api';
 
 interface Props {
   open: boolean;
-  initial: Settings;
+  initialName: string;
   firstRun: boolean;
-  onSave: (s: Settings) => void;
+  onSave: (name: string) => void;
   onCancel: () => void;
 }
 
-/** First launch: display name only, no accounts (D12); plus the LAN server address. */
-export function Setup({ open, initial, firstRun, onSave, onCancel }: Props) {
-  const [form] = Form.useForm<Settings>();
-  const [checking, setChecking] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const submit = async (values: Settings) => {
-    const s = { name: values.name.trim(), server: (values.server ?? '').trim() };
-    const saveAnyway = serverError !== null;
-    if (s.server && !saveAnyway) {
-      setChecking(true);
-      const ok = await api.health(s.server).then(
-        () => true,
-        () => false,
-      );
-      setChecking(false);
-      if (!ok) {
-        setServerError('Bu ünvanda server cavab vermir. Yenə də yadda saxlaya bilərsiniz — server tapılmayanda yerli rejim işləyir.');
-        return;
-      }
-    }
-    onSave(s);
-  };
-
+/** Display name only, no accounts (D12). The server is fixed in the build (D35). */
+export function Setup({ open, initialName, firstRun, onSave, onCancel }: Props) {
   return (
     <Modal
       open={open}
@@ -51,21 +26,17 @@ export function Setup({ open, initial, firstRun, onSave, onCancel }: Props) {
           Səs və kamera yoxdur — yalnız ekran. Başqalarının sizi tanıması üçün adınızı yazın.
         </Typography.Paragraph>
       )}
-      <Form form={form} layout="vertical" initialValues={initial} onFinish={(v) => void submit(v)} requiredMark={false}>
+      <Form
+        layout="vertical"
+        initialValues={{ name: initialName }}
+        onFinish={(v: { name: string }) => onSave(v.name.trim())}
+        requiredMark={false}
+      >
         <Form.Item name="name" label="Adınız" rules={[{ required: true, whitespace: true, message: 'Adınızı yazın' }]}>
           <Input maxLength={40} autoFocus placeholder="məs. Aysel Məmmədova" />
         </Form.Item>
-        <Form.Item
-          name="server"
-          label="Server ünvanı"
-          extra="IT-dən alın, məs. 192.168.1.10:8080. Boş qalsa, yalnız yerli rejim işləyir."
-          validateStatus={serverError ? 'warning' : undefined}
-          help={serverError ?? undefined}
-        >
-          <Input placeholder="192.168.1.10:8080" onChange={() => setServerError(null)} />
-        </Form.Item>
-        <Button type="primary" htmlType="submit" block loading={checking}>
-          {serverError ? 'Yenə də yadda saxla' : 'Yadda saxla'}
+        <Button type="primary" htmlType="submit" block>
+          Yadda saxla
         </Button>
       </Form>
     </Modal>

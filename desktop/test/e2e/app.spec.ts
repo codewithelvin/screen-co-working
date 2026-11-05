@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import {
-  API,
   type AppHandle,
   createRoom,
   DEAD_SERVER,
@@ -29,20 +28,21 @@ test.afterEach(async ({}, info) => {
   apps = [];
 });
 
-test('first run asks for a name and connects to the server', async () => {
+test('first run asks only for a name, pre-filled from the login, and connects', async () => {
   const a = await launch(null);
   apps.push(a);
   await expect(a.page.getByText('Xoş gəlmisiniz')).toBeVisible();
+  await expect(a.page.getByLabel('Adınız')).not.toHaveValue('');
+  await expect(a.page.getByText('Server ünvanı')).toHaveCount(0);
   await a.page.getByLabel('Adınız').fill('Yeni İşçi');
-  await a.page.getByLabel('Server ünvanı').fill(API);
   await a.page.getByRole('button', { name: 'Yadda saxla' }).click();
   await expect(a.page.getByText('Serverə qoşulub')).toBeVisible();
   await expect(a.page.locator('.sidebar-foot')).toContainText('Yeni İşçi');
 });
 
 test('room: share, watch, annotate, pause, one presenter, kick', async () => {
-  const elvin = await launch({ name: 'Elvin', server: API });
-  const aysel = await launch({ name: 'Aysel', server: API });
+  const elvin = await launch('Elvin');
+  const aysel = await launch('Aysel');
   apps.push(elvin, aysel);
 
   const code = await createRoom(elvin.page, 'E2E otağı');
@@ -78,8 +78,8 @@ test('room: share, watch, annotate, pause, one presenter, kick', async () => {
 });
 
 test('host stops someone else’s share', async () => {
-  const host = await launch({ name: 'Elvin', server: API });
-  const guest = await launch({ name: 'Aysel', server: API });
+  const host = await launch('Elvin');
+  const guest = await launch('Aysel');
   apps.push(host, guest);
   const code = await createRoom(host.page, 'Paylaşım dayandırma');
   await joinByCode(guest.page, code);
@@ -94,8 +94,8 @@ test('host stops someone else’s share', async () => {
 });
 
 test('same name gets the computer name; host role passes on when the host leaves', async () => {
-  const first = await launch({ name: 'Elvin', server: API });
-  const second = await launch({ name: 'Elvin', server: API });
+  const first = await launch('Elvin');
+  const second = await launch('Elvin');
   apps.push(first, second);
 
   const code = await createRoom(first.page, 'Ad testi');
@@ -110,8 +110,8 @@ test('same name gets the computer name; host role passes on when the host leaves
 });
 
 test('host closes the room for everyone', async () => {
-  const host = await launch({ name: 'Elvin', server: API });
-  const guest = await launch({ name: 'Aysel', server: API });
+  const host = await launch('Elvin');
+  const guest = await launch('Aysel');
   apps.push(host, guest);
   const code = await createRoom(host.page, 'Bağlanan otaq');
   await joinByCode(guest.page, code);
@@ -123,8 +123,8 @@ test('host closes the room for everyone', async () => {
 });
 
 test('server down: local P2P share is discovered and watched', async () => {
-  const presenter = await launch({ name: 'Elvin', server: DEAD_SERVER });
-  const viewer = await launch({ name: 'Aysel', server: DEAD_SERVER });
+  const presenter = await launch('Elvin', DEAD_SERVER);
+  const viewer = await launch('Aysel', DEAD_SERVER);
   apps.push(presenter, viewer);
   await expect(presenter.page.locator('.sidebar-status')).toContainText('Yerli rejim');
 

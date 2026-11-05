@@ -54,10 +54,6 @@ export function App() {
     if (!settings) return;
     let stop = false;
     const tick = async () => {
-      if (!settings.server) {
-        setServerUp(false);
-        return;
-      }
       try {
         const list = await api.rooms(settings.server);
         if (!stop) {
@@ -238,12 +234,12 @@ export function App() {
       <ScreenPicker open={picker !== null} onPick={(s) => void picked(s)} onCancel={() => setPicker(null)} />
       <Setup
         open={setupOpen}
-        initial={settings}
+        initialName={settings.name || window.scw.suggestedName}
         firstRun={!settings.name}
         onCancel={() => setSetupOpen(false)}
-        onSave={(s) => {
-          void window.scw.saveSettings(s).then(() => {
-            setSettings(s);
+        onSave={(name) => {
+          void window.scw.saveSettings({ name }).then(() => {
+            setSettings({ ...settings, name });
             setSetupOpen(false);
           });
         }}
