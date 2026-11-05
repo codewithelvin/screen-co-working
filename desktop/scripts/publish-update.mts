@@ -1,14 +1,18 @@
 // Writes latest.json for the self-updater (D19) and copies the builds into an updates folder.
-// Usage: node scripts/publish-update.mts <updates-dir>   (e.g. ../deploy/updates, or the server's folder)
+// Usage: node scripts/publish-update.mts <updates-dir> [release-dir] [--min <version>]
+// --min: apps below this version are refused by the server and must update before joining.
+// Without --min the previous minimum in <updates-dir>/latest.json is kept.
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
-const target = process.argv[2];
-const from = process.argv[3] ?? 'release';
-if (!target) {
-  console.error('usage: node scripts/publish-update.mts <updates-dir> [release-dir]');
+const args = process.argv.slice(2);
+const minAt = args.indexOf('--min');
+const minArg = minAt >= 0 ? args.splice(minAt, 2)[1] : undefined;
+const [target, from = 'release'] = args;
+if (!target || (minAt >= 0 && !/^\d+\.\d+\.\d+$/.test(minArg ?? ''))) {
+  console.error('usage: node scripts/publish-update.mts <updates-dir> [release-dir] [--min <x.y.z>]');
   process.exit(1);
 }
 mkdirSync(target, { recursive: true });
@@ -32,5 +36,10 @@ if (Object.keys(files).length === 0) {
   console.error(`no builds for version ${pkg.version} in ${from} — run npm run dist first`);
   process.exit(1);
 }
-writeFileSync(join(target, 'latest.json'), JSON.stringify({ version: pkg.version, files }, null, 2));
-console.log(`latest.json -> ${pkg.version}`);
+const manifestPath = join(target, 'latest.json');
+const previous = existsSync(manifestPath)
+  ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as { minVersion?: string }).minVersion
+  : undefined;
+const minVersion = minArg ?? previous;
+writeFileSync(manifestPath, JSON.stringify({ version: pkg.version, ...(minVersion ? { minVersion } : {}), files }, null, 2));
+console.log(`latest.json -> ${pkg.version}${minVersion ? ` (minimum ${minVersion})` : ''}`);

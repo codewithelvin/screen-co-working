@@ -72,6 +72,13 @@ Tuning on the server: `PROXIMITY_THRESHOLD` (default 0.5, 0..1 similarity of two
 3. Running apps check `http://<server>:8080/updates/latest.json` at start and every 30 minutes. They
    download in the background and offer "Yenidən başlat" (restart) to swap the file in place.
 
+**Forcing an update.** Add `--min <version>` when publishing (`node scripts/publish-update.mts <dir> <release-dir> --min 0.2.1`).
+`latest.json` then carries `minVersion`, and the server refuses `/api/join` from any older app (HTTP 426).
+Apps from before 0.2.1 send no version, so they count as older. The app shows a blocking "Yeni versiya
+tələb olunur" screen that downloads the update and restarts with one click. It never interrupts a
+room in progress: the screen appears after the user leaves. Later publishes keep the minimum unless
+`--min` is given again. `MIN_CLIENT_VERSION` on the server overrides the file.
+
 macOS builds are unsigned. Gatekeeper asks the user to allow the app on first launch.
 
 ## Tests
@@ -91,6 +98,9 @@ SCW_API=127.0.0.1:18080 npm run test:e2e   # Playwright drives real app windows 
 ```
 
 The E2E suite covers first run, share/watch/annotate/pause, one presenter, kick, the host stopping
-a share, duplicate names, host handover, closing a room, server-down P2P mode, and voice (a fake Wi-Fi scan via `SCW_FAKE_WIFI`, a fake mic).
+a share, duplicate names, host handover, closing a room, server-down P2P mode, voice, and the minimum-version refusal (a fake Wi-Fi scan via `SCW_FAKE_WIFI`, a fake mic).
+
+`SCW_E2E_EXE=<path to win-unpacked exe>` runs the same E2E suite against a packaged build.
+`npm run audit:ui` (in desktop) checks text contrast and font sizes on the main screens.
 
 `SCW_DATA_DIR=<folder>` runs an instance with its own settings, so you can run two on one machine by hand.

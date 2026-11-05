@@ -36,9 +36,9 @@ export type NotifyMuteResult = 'ok' | 'unsupported' | 'failed';
 
 export type UpdateState =
   | { status: 'idle' }
-  | { status: 'downloading'; version: string }
-  | { status: 'ready'; version: string }
-  | { status: 'error'; message: string };
+  | { status: 'downloading'; version: string; required: boolean }
+  | { status: 'ready'; version: string; required: boolean }
+  | { status: 'error'; message: string; required: boolean };
 
 /** Pointer/annotation and control messages, coordinates normalised to 0..1 of the shared screen. */
 export type AnnoMsg =
@@ -94,6 +94,8 @@ export interface ScwApi {
   // Updates
   onUpdate(cb: (s: UpdateState) => void): () => void;
   installUpdate(): Promise<void>;
+  /** Check the server for an update now (after a refused join, or to retry a failed download). */
+  checkUpdate(): Promise<void>;
   // Overlay window only
   onOverlayEvent(cb: (e: AnnoEvent) => void): () => void;
   onOverlayInit(cb: (presenterName: string) => void): () => void;

@@ -1,11 +1,12 @@
 import { App as AntApp, Button, Flex, Spin } from 'antd';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { LocalSession, ScreenSource, Settings, UpdateState } from '../../shared/types';
-import { api, type RoomInfo } from './api';
+import { ApiError, api, type RoomInfo } from './api';
 import { ScreenPicker } from './components/ScreenPicker';
 import { Setup } from './components/Setup';
 import { Sidebar } from './components/Sidebar';
 import { Stage } from './components/Stage';
+import { UpdateGate } from './components/UpdateGate';
 import { LiveKitSession } from './session/LiveKitSession';
 import { P2PHostSession, P2PViewerSession } from './session/P2PSession';
 import type { HostAction, Session, Snapshot } from './session/Session';
@@ -30,6 +31,9 @@ export function App() {
   const [localSessions, setLocalSessions] = useState<LocalSession[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
+  const [update, setUpdate] = useState<UpdateState>({ status: 'idle' });
+  /** The server refused a join because this version is too old. */
+  const [refused, setRefused] = useState(false);
   /** What to do with the monitor chosen in the picker. */
   const [picker, setPicker] = useState<null | { kind: 'room' } | { kind: 'local'; title: string }>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -83,7 +87,9 @@ export function App() {
   useEffect(
     () =>
       window.scw.onUpdate((s: UpdateState) => {
-        if (s.status === 'ready') {
+        setUpdate(s);
+        // A required update gets the blocking UpdateGate instead of this optional notice.
+        if (s.status === 'ready' && !s.required) {
           notification.info({
             key: 'update',
             title: `Yeni versiya hazırdır (v${s.version})`,
@@ -141,7 +147,12 @@ export function App() {
       setSession(await LiveKitSession.connect(settings.server, code.trim().toUpperCase(), settings.name));
       return true;
     } catch (e) {
-      message.error(errorText(e));
+      if (e instanceof ApiError && e.updateRequired) {
+        setRefused(true);
+        void window.scw.checkUpdate();
+      } else {
+        message.error(errorText(e));
+      }
       return false;
     } finally {
       setBusy(false);
@@ -234,6 +245,7 @@ export function App() {
         onPause={(p) => void session?.setPaused(p)}
         onStop={() => void (snap?.mode === 'p2p' ? leave() : session?.stopShare())}
       />
+      <UpdateGate open={(refused || ('required' in update && update.required)) && !session} update={update} />
       <ScreenPicker open={picker !== null} onPick={(s) => void picked(s)} onCancel={() => setPicker(null)} />
       <Setup
         open={setupOpen}

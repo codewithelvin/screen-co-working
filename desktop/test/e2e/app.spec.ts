@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
   allVoicesMuted,
@@ -186,4 +188,23 @@ test('voice: three at one desk share a room mic, the one in the canteen talks', 
   await expect(elvin.page.getByRole('button', { name: 'Otaq mikrofonunu götür' })).toBeVisible({ timeout: 20_000 });
   await expect(nigar.page.locator('.person-row', { hasText: 'Elvin' }).locator('.mic-icon')).toHaveCount(0);
   expect(await allVoicesMuted(elvin.page)).toBe(true);
+});
+
+test('server refuses an app below the minimum version and the app blocks until it updates', async () => {
+  // The test stack serves deploy/updates; raise the minimum there and put it back afterwards.
+  const manifest = join(__dirname, '..', '..', '..', 'deploy', 'updates', 'latest.json');
+  const original = readFileSync(manifest, 'utf8');
+  writeFileSync(manifest, JSON.stringify({ ...JSON.parse(original), minVersion: '99.0.0' }));
+  try {
+    const a = await launch('Elvin');
+    apps.push(a);
+    await a.page.locator('.section-head button').first().click();
+    await a.page.locator('.ant-modal input').fill('Köhnə versiya');
+    await a.page.getByRole('button', { name: 'Yarat' }).click();
+    await expect(a.page.getByText('Yeni versiya tələb olunur')).toBeVisible();
+    await expect(a.page.getByText(/Bu versiya \(v[\d.]+\) artıq dəstəklənmir/)).toBeVisible();
+    await expect(a.page.locator('.stage-head')).toHaveCount(0);
+  } finally {
+    writeFileSync(manifest, original);
+  }
 });

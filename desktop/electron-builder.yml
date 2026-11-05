@@ -7,6 +7,12 @@ files:
   - out/**
   - package.json
 asar: true
+# Size (2026-11-05): the renderer is a Vite bundle, so only main-process modules (ws) are runtime
+# dependencies. One Chromium locale (its own UI strings only; ours are inline), max LZMA, and
+# afterPack drops the WebGPU-only shader compiler.
+electronLanguages: [en-US]
+compression: maximum
+afterPack: scripts/after-pack.mjs
 win:
   target: portable
   artifactName: Screen-Co-Working-${version}-win-portable.exe

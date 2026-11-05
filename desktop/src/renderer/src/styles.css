@@ -75,3 +75,7 @@ html, body, #root, #root > .ant-app { margin: 0; height: 100%; background: var(-
 }
 .screen-card:hover, .screen-card:focus-visible { border-color: var(--scw-primary); outline: none; }
 .screen-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: 4px; }
+
+/* update gate */
+.update-gate { text-align: center; padding: 8px 4px; }
+.update-gate-icon { font-size: 40px; color: var(--scw-primary); }

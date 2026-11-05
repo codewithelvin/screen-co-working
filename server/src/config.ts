@@ -13,6 +13,8 @@ export const config = {
   /** What desktop clients connect to; empty = same host as the API, port 7880. */
   livekitPublicUrl: process.env.LIVEKIT_PUBLIC_URL ?? '',
   updatesDir: process.env.UPDATES_DIR ?? '/data/updates',
+  /** Apps below this version may not join. Empty = take `minVersion` from updates/latest.json. */
+  minClientVersion: process.env.MIN_CLIENT_VERSION ?? '',
   /** LiveKit room-name prefix; keeps our rooms apart when the LiveKit is shared. */
   roomPrefix: process.env.ROOM_PREFIX ?? 'scw-',
   /** Wi-Fi fingerprint similarity (0..1) from which two people count as next to each other (D37). */

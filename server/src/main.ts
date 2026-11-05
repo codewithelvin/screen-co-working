@@ -1,11 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { join as joinPath, normalize, extname } from 'node:path';
 import { AccessToken, RoomServiceClient, DataPacket_Kind, TrackSource, TrackType, type ParticipantInfo } from 'livekit-server-sdk';
 import { config } from './config.ts';
 import { type AccessPoint, type Fingerprint, groupsOf, voicePlan } from './proximity.ts';
 import { hostOf, newCode, roomTitle, sameSecret, uniqueName } from './rooms.ts';
+import { mustUpdate } from './version.ts';
 
 const rooms = new RoomServiceClient(config.livekitInternalUrl, config.apiKey, config.apiSecret);
 
@@ -111,7 +112,26 @@ async function createRoom(body: Record<string, unknown>) {
   return { code, title };
 }
 
+/** Lowest app version allowed to join: MIN_CLIENT_VERSION, else latest.json's minVersion (re-read when it changes). */
+let manifestCache: { mtimeMs: number; min: string } | null = null;
+function minClientVersion(): string {
+  if (config.minClientVersion) return config.minClientVersion;
+  const file = joinPath(config.updatesDir, 'latest.json');
+  try {
+    const { mtimeMs } = statSync(file);
+    if (manifestCache?.mtimeMs !== mtimeMs) {
+      const m = JSON.parse(readFileSync(file, 'utf8')) as { minVersion?: unknown };
+      manifestCache = { mtimeMs, min: typeof m.minVersion === 'string' ? m.minVersion : '' };
+    }
+    return manifestCache.min;
+  } catch {
+    return '';
+  }
+}
+
 async function join(body: Record<string, unknown>, req: IncomingMessage) {
+  const min = minClientVersion();
+  if (mustUpdate(body.version, min)) throw new HttpError(426, 'update required');
   const code = str(body.code, 'code', 12).toUpperCase();
   const name = str(body.name, 'name', 40);
   const hostname = typeof body.hostname === 'string' ? body.hostname.trim().slice(0, 40) : '';

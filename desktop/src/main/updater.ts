@@ -19,6 +19,8 @@ import { programFile } from './portable';
  */
 interface Manifest {
   version: string;
+  /** Apps below this must update; the server refuses their joins. */
+  minVersion?: string;
   files: Partial<Record<'win' | 'linux' | 'mac', { file: string; sha256: string }>>;
 }
 
@@ -26,6 +28,7 @@ const platformKey = { win32: 'win', linux: 'linux', darwin: 'mac' } as const;
 
 let state: UpdateState = { status: 'idle' };
 let staged: string | null = null;
+let required = false;
 
 export async function checkForUpdate(server: string, emit: (s: UpdateState) => void): Promise<void> {
   if (!app.isPackaged || !server || state.status === 'downloading' || state.status === 'ready') return;
@@ -38,8 +41,9 @@ export async function checkForUpdate(server: string, emit: (s: UpdateState) => v
     const manifest = (await res.json()) as Manifest;
     const entry = manifest.files[key];
     if (!entry || !isNewer(manifest.version, app.getVersion())) return;
+    required = !!manifest.minVersion && isNewer(manifest.minVersion, app.getVersion());
 
-    state = { status: 'downloading', version: manifest.version };
+    state = { status: 'downloading', version: manifest.version, required };
     emit(state);
     const target = programFile();
     const download = join(process.platform === 'darwin' ? tmpdir() : dirname(target), `.${basename(entry.file)}.part`);
@@ -54,10 +58,10 @@ export async function checkForUpdate(server: string, emit: (s: UpdateState) => v
       throw new Error('checksum mismatch');
     }
     staged = download;
-    state = { status: 'ready', version: manifest.version };
+    state = { status: 'ready', version: manifest.version, required };
     emit(state);
   } catch (e) {
-    state = { status: 'error', message: e instanceof Error ? e.message : String(e) };
+    state = { status: 'error', message: e instanceof Error ? e.message : String(e), required };
     emit(state);
   }
 }

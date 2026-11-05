@@ -18,7 +18,10 @@ export interface JoinInfo {
   title: string;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The server refused this app version (HTTP 426); it must update first. */
+  updateRequired = false;
+}
 
 const MESSAGES: Record<string, string> = {
   'room not found': 'Otaq tapılmadı. Kodu yoxlayın.',
@@ -26,6 +29,7 @@ const MESSAGES: Record<string, string> = {
   'only the host can do this': 'Bunu yalnız otağın sahibi edə bilər.',
   'not authorised': 'İcazə yoxdur.',
   'relay server unavailable': 'Media server cavab vermir.',
+  'update required': 'Proqramın yeni versiyası tələb olunur.',
 };
 
 function base(server: string): string {
@@ -48,7 +52,9 @@ async function call<T>(server: string, path: string, body?: unknown): Promise<T>
   if (!res.ok) {
     const err = data.error ?? `HTTP ${res.status}`;
     const presenting = / is already presenting$/.exec(err);
-    throw new ApiError(presenting ? `${err.replace(/ is already presenting$/, '')} artıq ekranını paylaşır.` : (MESSAGES[err] ?? err));
+    const error = new ApiError(presenting ? `${err.replace(/ is already presenting$/, '')} artıq ekranını paylaşır.` : (MESSAGES[err] ?? err));
+    error.updateRequired = res.status === 426;
+    throw error;
   }
   return data as T;
 }
@@ -58,7 +64,7 @@ export const api = {
   rooms: (server: string) => call<RoomInfo[]>(server, '/api/rooms'),
   createRoom: (server: string, title: string) => call<{ code: string; title: string }>(server, '/api/rooms', { title }),
   join: (server: string, code: string, name: string, hostname: string) =>
-    call<JoinInfo>(server, '/api/join', { code, name, hostname }),
+    call<JoinInfo>(server, '/api/join', { code, name, hostname, version: window.scw.version }),
   present: (server: string, code: string, j: JoinInfo, on: boolean) =>
     call(server, `/api/rooms/${code}/present`, { identity: j.identity, secret: j.secret, on }),
   presence: (server: string, code: string, j: JoinInfo, aps: AccessPoint[]) =>

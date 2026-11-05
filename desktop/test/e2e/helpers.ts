@@ -35,9 +35,12 @@ export function allVoicesMuted(page: Page): Promise<boolean> {
 export async function launch(name: string | null, server = API, wifi: [string, number][] = []): Promise<AppHandle> {
   const dir = mkdtempSync(join(tmpdir(), 'scw-e2e-'));
   if (name) writeFileSync(join(dir, 'settings.json'), JSON.stringify({ name }));
+  // SCW_E2E_EXE runs the packaged app (e.g. release/win-unpacked/Screen Co-Working.exe) instead of out/.
+  const exe = process.env.SCW_E2E_EXE;
   const app = await electron.launch({
+    ...(exe ? { executablePath: exe } : {}),
     // A fake microphone, and a fake Wi-Fi scan (none by default: everyone counts as alone).
-    args: [join(__dirname, '..', '..'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: [...(exe ? [] : [join(__dirname, '..', '..')]), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     env: {
       ...process.env,
       SCW_DATA_DIR: dir,

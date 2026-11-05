@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/main.ts",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node --test test/rooms.test.ts test/proximity.test.ts",
+    "test": "node --test test/rooms.test.ts test/proximity.test.ts test/version.test.ts",
     "test:api": "node --test test/api.test.ts"
   },
   "dependencies": {

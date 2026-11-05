@@ -32,6 +32,7 @@ const api: ScwApi = {
   listLocalSessions: () => ipcRenderer.invoke('p2p:sessions'),
   onUpdate: (cb) => listen<[UpdateState]>('update:state', cb),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
   onOverlayEvent: (cb) => listen<[AnnoEvent]>('overlay:event', cb),
   onOverlayInit: (cb) => listen<[string]>('overlay:init', cb),
 };

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, screen, session, shell } from 'electron';
 import { hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { COMPANY_SERVER } from '../shared/config';
@@ -25,6 +25,50 @@ const SERVER = process.env.SCW_SERVER || COMPANY_SERVER;
 
 const preload = join(__dirname, '../preload/index.js');
 
+/** No DevTools in the shipped app; development keeps them. */
+const webPreferences = {
+  preload,
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+  devTools: !app.isPackaged,
+};
+
+/**
+ * Replaces Electron's default menu, whose hidden shortcuts include DevTools (Ctrl+Shift+I) and
+ * reload (Ctrl+R / F5), which would silently drop the user out of the room. Edit roles stay
+ * because macOS copy/paste goes through the menu; zoom stays for readability.
+ */
+function setMenu(): void {
+  const edit: Electron.MenuItemConstructorOptions = {
+    label: 'Redaktə',
+    submenu: [
+      { role: 'undo', label: 'Geri al' },
+      { role: 'redo', label: 'Təkrarla' },
+      { type: 'separator' },
+      { role: 'cut', label: 'Kəs' },
+      { role: 'copy', label: 'Kopyala' },
+      { role: 'paste', label: 'Yapışdır' },
+      { role: 'selectAll', label: 'Hamısını seç' },
+    ],
+  };
+  const view: Electron.MenuItemConstructorOptions = {
+    label: 'Görünüş',
+    submenu: [
+      { role: 'zoomIn', label: 'Böyüt' },
+      { role: 'zoomOut', label: 'Kiçilt' },
+      { role: 'resetZoom', label: 'Əsl ölçü' },
+      { type: 'separator' },
+      { role: 'togglefullscreen', label: 'Tam ekran' },
+    ],
+  };
+  const mac: Electron.MenuItemConstructorOptions[] =
+    process.platform === 'darwin'
+      ? [{ label: app.name, submenu: [{ role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }]
+      : [];
+  Menu.setApplicationMenu(Menu.buildFromTemplate([...mac, edit, view]));
+}
+
 function loadPage(win: BrowserWindow, page: 'index' | 'overlay'): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html`);
   else void win.loadFile(join(__dirname, `../renderer/${page}.html`));
@@ -36,10 +80,10 @@ function createMain(): void {
     height: 800,
     minWidth: 900,
     minHeight: 560,
-    backgroundColor: '#141414',
+    backgroundColor: '#1d1424',
     title: 'Screen Co-Working',
     autoHideMenuBar: true,
-    webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences,
   });
   main.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -72,7 +116,7 @@ function showOverlay(displayId: string, presenterName: string): void {
       hasShadow: false,
       alwaysOnTop: true,
       show: false,
-      webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false },
+      webPreferences,
     });
     overlay.setAlwaysOnTop(true, 'screen-saver');
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -146,6 +190,7 @@ function registerIpc(): void {
   ipcMain.on('p2p:host-kick', (_e, peerId: string) => p2p.hostKick(peerId));
   ipcMain.handle('p2p:sessions', () => p2p.localSessions());
 
+  ipcMain.handle('update:check', () => checkForUpdate(SERVER, emitUpdate));
   ipcMain.handle('update:install', async () => {
     await p2p.hostStop();
     await restoreNotifications();
@@ -156,6 +201,7 @@ function registerIpc(): void {
 void app.whenReady().then(async () => {
   await restoreNotifications(); // in case the last run crashed while sharing
   registerIpc();
+  setMenu();
 
   // getDisplayMedia() in the renderer gets the monitor picked in our own picker.
   session.defaultSession.setDisplayMediaRequestHandler(

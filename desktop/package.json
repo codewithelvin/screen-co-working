@@ -1,7 +1,7 @@
 {
   "name": "@scw/desktop",
   "productName": "Screen Co-Working",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Silent screen co-working on the office LAN",
   "main": "out/main/index.js",
@@ -20,28 +20,28 @@
     "audit:ui": "electron-vite build && playwright test -c test/audit"
   },
   "devDependencies": {
+    "@ant-design/icons": "^6.3.4",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.2.1",
+    "antd": "^6.7.0",
     "electron": "45.2.3",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "livekit-client": "^2.23.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.3.4",
-    "antd": "^6.7.0",
-    "livekit-client": "^2.23.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
     "ws": "^8.22.1"
   },
   "author": "Elvin Huseynov"
