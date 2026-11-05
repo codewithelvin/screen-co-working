@@ -23,7 +23,7 @@ export function Setup({ open, initialName, firstRun, onSave, onCancel }: Props) 
     >
       {firstRun && (
         <Typography.Paragraph type="secondary">
-          Səs və kamera yoxdur — yalnız ekran. Başqalarının sizi tanıması üçün adınızı yazın.
+          Burada ekran paylaşılır, kamera yoxdur. Mikrofon yalnız komandadan ayrı oturanda açılır. Başqalarının sizi tanıması üçün adınızı yazın.
         </Typography.Paragraph>
       )}
       <Form

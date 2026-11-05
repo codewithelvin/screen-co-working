@@ -21,7 +21,7 @@ interface Props {
   localSessions: LocalSession[];
   snap: Snapshot | null;
   busy: boolean;
-  onJoinRoom: (code: string) => void;
+  onJoinRoom: (code: string) => Promise<boolean>;
   onCreateRoom: (title: string) => void;
   onJoinLocal: (s: LocalSession) => void;
   onStartLocal: (title: string) => void;
@@ -41,6 +41,11 @@ export function Sidebar(p: Props) {
     else p.onStartLocal(t);
     setCreateOpen(null);
     setTitle('');
+  };
+
+  // A mistyped code stays in the box to fix; a successful join clears it.
+  const joinByCode = async () => {
+    if (code && (await p.onJoinRoom(code))) setCode('');
   };
 
   return (
@@ -85,9 +90,9 @@ export function Sidebar(p: Props) {
                 value={code}
                 maxLength={12}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                onPressEnter={() => code && p.onJoinRoom(code)}
+                onPressEnter={() => void joinByCode()}
               />
-              <Button size="small" disabled={!code || p.busy} onClick={() => p.onJoinRoom(code)}>
+              <Button size="small" disabled={!code || p.busy} onClick={() => void joinByCode()}>
                 Qoşul
               </Button>
             </Space.Compact>
@@ -100,7 +105,7 @@ export function Sidebar(p: Props) {
                   key={r.code}
                   className={`room-row${active ? ' active' : ''}`}
                   disabled={p.busy || active}
-                  onClick={() => p.onJoinRoom(r.code)}
+                  onClick={() => void p.onJoinRoom(r.code)}
                 >
                   <Badge status={presenter ? 'processing' : 'default'} />
                   <span className="room-title">{r.title}</span>

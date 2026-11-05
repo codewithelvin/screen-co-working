@@ -132,14 +132,17 @@ export function App() {
       });
     });
 
-  const joinRoom = async (code: string) => {
-    if (!settings || busy || !(await confirmSwitch())) return;
+  /** Resolves true once in the room, so the code box can clear. */
+  const joinRoom = async (code: string): Promise<boolean> => {
+    if (!settings || busy || !(await confirmSwitch())) return false;
     setBusy(true);
     try {
       await leave();
       setSession(await LiveKitSession.connect(settings.server, code.trim().toUpperCase(), settings.name));
+      return true;
     } catch (e) {
       message.error(errorText(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -214,7 +217,7 @@ export function App() {
         localSessions={localSessions}
         snap={snap}
         busy={busy}
-        onJoinRoom={(c) => void joinRoom(c)}
+        onJoinRoom={joinRoom}
         onCreateRoom={(t) => void createRoom(t)}
         onJoinLocal={(s) => void joinLocal(s)}
         onStartLocal={(title) => setPicker({ kind: 'local', title })}

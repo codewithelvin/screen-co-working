@@ -3,7 +3,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 body.paused .frame { border-color: #faad14; border-style: dashed; }
 .badge {
   position: fixed; top: 0; left: 50%; transform: translateX(-50%);
-  background: #ff3b30; color: #fff; font: 600 13px "Segoe UI", system-ui, sans-serif;
+  background: #d92d20; color: #fff; font: 600 14px "Segoe UI", system-ui, sans-serif;
   padding: 3px 12px; border-radius: 0 0 8px 8px;
 }
 .badge:empty { display: none; }
