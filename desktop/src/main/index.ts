@@ -240,7 +240,8 @@ void app.whenReady().then(async () => {
   createMain();
 
   main?.webContents.once('did-finish-load', () => void checkForUpdate(SERVER, emitUpdate));
-  setInterval(() => void checkForUpdate(SERVER, emitUpdate), 30 * 60 * 1000);
+  // Every 5 minutes: only the small manifest is fetched until there is something new.
+  setInterval(() => void checkForUpdate(SERVER, emitUpdate), 5 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMain();

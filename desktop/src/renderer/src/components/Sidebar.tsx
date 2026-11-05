@@ -10,8 +10,9 @@ import {
 } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Flex, Input, Modal, Space, Tag, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
-import type { LocalSession } from '../../../shared/types';
+import type { LocalSession, UpdateState } from '../../../shared/types';
 import type { HostAction, Snapshot } from '../session/Session';
+import { UpdateButton } from './UpdateButton';
 
 interface Props {
   name: string;
@@ -25,6 +26,7 @@ interface Props {
   onStartLocal: (title: string) => void;
   onHostAction: (action: HostAction, target: string) => void;
   onSettings: () => void;
+  update: UpdateState;
 }
 
 export function Sidebar(p: Props) {
@@ -195,11 +197,12 @@ export function Sidebar(p: Props) {
         )}
       </div>
 
-      <div className="sidebar-foot">
-        <Typography.Text type="secondary" ellipsis>
+      <Flex className="sidebar-foot" align="center" gap={6}>
+        <Typography.Text type="secondary" ellipsis className="sidebar-foot-text">
           {p.name} · v{window.scw.version}
         </Typography.Text>
-      </div>
+        <UpdateButton update={p.update} />
+      </Flex>
 
       <Modal
         open={createOpen !== null}

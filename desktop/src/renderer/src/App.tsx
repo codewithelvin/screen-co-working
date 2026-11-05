@@ -122,6 +122,7 @@ export function App() {
     sessionRef.current = null;
     setSession(null);
     await s.leave().catch(() => undefined);
+    void window.scw.checkUpdate(); // a good moment to offer a restart
   }, []);
 
   const confirmSwitch = (): Promise<boolean> =>
@@ -232,6 +233,7 @@ export function App() {
         onStartLocal={(title) => setPicker({ kind: 'local', title })}
         onHostAction={(a, t) => void hostAction(a, t)}
         onSettings={() => setSetupOpen(true)}
+        update={update}
       />
       )}
       <Stage

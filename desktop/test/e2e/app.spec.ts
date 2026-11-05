@@ -44,6 +44,9 @@ test('first run asks only for a name, pre-filled from the login, and connects', 
   await a.page.getByRole('button', { name: 'Yadda saxla' }).click();
   await expect(a.page.getByText('Serverə qoşulub')).toBeVisible();
   await expect(a.page.locator('.sidebar-foot')).toContainText('Yeni İşçi');
+  // Manual update check next to the version (a dev build is never behind, so it ends "up to date").
+  await a.page.getByRole('button', { name: 'Yeniləməni yoxla' }).click();
+  await expect(a.page.locator('.sidebar-foot .anticon-check')).toBeVisible();
 });
 
 test('room: share, watch, annotate, pause, one presenter, kick', async () => {
@@ -54,6 +57,15 @@ test('room: share, watch, annotate, pause, one presenter, kick', async () => {
   const code = await createRoom(elvin.page, 'E2E otağı');
   await joinByCode(aysel.page, code);
   await expect(aysel.page.locator('.person-row')).toHaveCount(2);
+
+  // Nothing in the sidebar sticks out past its edge (the room card's count once did).
+  const overflow = await aysel.page.evaluate(() => {
+    const edge = document.querySelector('.sidebar')!.getBoundingClientRect().right;
+    return [...document.querySelectorAll('.sidebar *')]
+      .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
+      .map((el) => el.className || el.tagName);
+  });
+  expect(overflow).toEqual([]);
 
   // Elvin joined first, so he is host; he shares the entire screen.
   await expect(elvin.page.locator('.person-row', { hasText: 'Elvin' }).locator('.crown')).toBeVisible();
