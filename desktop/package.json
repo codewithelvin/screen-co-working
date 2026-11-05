@@ -1,7 +1,7 @@
 {
   "name": "@scw/desktop",
   "productName": "Screen Co-Working",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "description": "Silent screen co-working on the office LAN",
   "main": "out/main/index.js",

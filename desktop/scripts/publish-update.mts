@@ -4,10 +4,13 @@
 // --min: apps below this version are refused by the server and must update before joining.
 // Without --min the previous minimum in <updates-dir>/latest.json is kept.
 // Macs update through Homebrew, so the mac zips are not published here.
+// The manifest is signed with the release key (scripts/update-key.mts); apps from 0.3.7 on refuse
+// an update without a valid signature.
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildsFor, version } from './builds-dir.mts';
+import { signPayload } from './signing.mts';
 
 const args = process.argv.slice(2);
 const minAt = args.indexOf('--min');
@@ -44,5 +47,8 @@ const previous = existsSync(manifestPath)
   ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as { minVersion?: string }).minVersion
   : undefined;
 const minVersion = minArg ?? previous;
-writeFileSync(manifestPath, JSON.stringify({ version, ...(minVersion ? { minVersion } : {}), files }, null, 2));
+const manifest = { version, ...(minVersion ? { minVersion } : {}), files };
+const payload = JSON.stringify(manifest);
+// Top-level fields: apps up to 0.3.6 and the server (minVersion) read those. `signed`: everyone newer.
+writeFileSync(manifestPath, JSON.stringify({ ...manifest, signed: { payload, sig: signPayload(payload) } }, null, 2));
 console.log(`latest.json -> ${version}${minVersion ? ` (minimum ${minVersion})` : ''}`);

@@ -45,9 +45,14 @@ test('first run asks only for a name, pre-filled from the login, and connects', 
   await a.page.getByRole('button', { name: 'Yadda saxla' }).click();
   await expect(a.page.getByText('Serverə qoşulub')).toBeVisible();
   await expect(a.page.locator('.sidebar-foot')).toContainText('Yeni İşçi');
-  // Manual update check next to the version (a dev build is never behind, so it ends "up to date").
+  // Manual update check next to the version. A dev build skips checks, so it ends "up to date"; a
+  // packaged build reads the test stack's unsigned latest.json and must refuse it.
   await a.page.getByRole('button', { name: 'Yeniləməni yoxla' }).click();
-  await expect(a.page.locator('.sidebar-foot .anticon-check')).toBeVisible();
+  await expect(
+    process.env.SCW_E2E_EXE
+      ? a.page.getByText('Yeniləməni yoxlamaq alınmadı.')
+      : a.page.locator('.sidebar-foot .anticon-check'),
+  ).toBeVisible();
 });
 
 test('room: share, watch, annotate, pause, one presenter, kick', async () => {

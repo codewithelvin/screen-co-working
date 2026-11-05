@@ -8,21 +8,18 @@ import { Readable } from 'node:stream';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { pipeline } from 'node:stream/promises';
 import type { UpdateState } from '../shared/types';
+import { UPDATE_PUBLIC_KEY } from '../shared/config';
 import { isNewer } from '../shared/version';
+import { type ServedManifest, verifiedManifest } from './manifest';
 import { installKind, programFile } from './portable';
 
 /**
  * Self-update (D19, D45). The LAN server publishes /updates/latest.json (scripts/publish-update.mts).
  * Portable exe and AppImage: download next to the program, check the SHA-256, swap on restart.
  * .deb: download to temp and open the system installer. Homebrew: nothing to download; the user
- * runs `brew upgrade` (the cask lives in the codewithelvin/homebrew-tap repo).
+ * runs `brew upgrade` (the cask lives in the codewithelvin/homebrew-tap repo). The manifest must carry
+ * a valid release-key signature (manifest.ts), and each file must match its signed SHA-256.
  */
-interface Manifest {
-  version: string;
-  /** Apps below this must update; the server refuses their joins. */
-  minVersion?: string;
-  files: Partial<Record<'win' | 'linux' | 'deb' | 'mac', { file: string; sha256: string }>>;
-}
 
 /** Which latest.json entry this copy downloads; brew has none. */
 const fileKey = { portable: 'win', appimage: 'linux', deb: 'deb', brew: null } as const;
@@ -41,7 +38,8 @@ export async function checkForUpdate(server: string, emit: (s: UpdateState) => v
   try {
     const res = await fetch(base + 'latest.json', { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return;
-    const manifest = (await res.json()) as Manifest;
+    // Only a manifest signed with the release key counts; a forged server or file is ignored.
+    const manifest = verifiedManifest((await res.json()) as ServedManifest, UPDATE_PUBLIC_KEY);
     if (!isNewer(manifest.version, app.getVersion())) return;
     required = !!manifest.minVersion && isNewer(manifest.minVersion, app.getVersion());
     if (key === null) {
